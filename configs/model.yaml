@@ -1,0 +1,17 @@
+lstm:
+  input_features: 16
+  hidden_size: 64
+  num_layers: 2
+  dropout: 0.3
+training:
+  batch_size: 64
+  lr: 0.001
+  max_epochs: 100
+  early_stopping_patience: 10
+  split_by: person           # jamais par clip : évite la fuite de données
+augmentation:
+  mirror: true
+  rotation_deg: 10
+  speed_range: [0.8, 1.2]
+random_forest:
+  n_estimators: 200

@@ -1,0 +1,16 @@
+# Seuils de départ, à ajuster sur nos enregistrements.
+rep_counter:
+  squat:  {angle: knee,  top_above: 160, bottom_below: 100}
+  pushup: {angle: elbow, top_above: 155, bottom_below: 90}
+  curl:   {angle: elbow, top_above: 150, bottom_below: 50}
+
+form_rules:
+  squat:
+    - {code: SQUAT_SHALLOW, check: "min_knee > 100",  tip: "Go a bit lower", priority: 2}
+    - {code: SQUAT_LEAN,    check: "torso_lean > 45", tip: "Chest up!",      priority: 1}
+  pushup:
+    - {code: PUSHUP_SAG,     check: "body_line < 160", tip: "Tighten your core", priority: 1}
+    - {code: PUSHUP_SHALLOW, check: "min_elbow > 90",  tip: "Lower your chest",  priority: 2}
+  curl:
+    - {code: CURL_SWING,   check: "arm_swing > 20", tip: "Keep elbows still",  priority: 1}
+    - {code: CURL_PARTIAL, check: "min_elbow > 50", tip: "Squeeze to the top", priority: 2}

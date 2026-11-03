@@ -1,0 +1,15 @@
+[project]
+name = "ai-workout-coach"
+version = "0.1.0"
+description = "Coach sportif par webcam : reconnaissance d'exercice, comptage de répétitions, correction de posture."
+requires-python = ">=3.11"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100

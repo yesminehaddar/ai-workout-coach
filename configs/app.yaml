@@ -1,0 +1,27 @@
+camera:
+  width: 1280
+  height: 720
+  fps: 30
+  mirror: true
+
+pose:
+  model_complexity: 1        # 0 = lite, 1 = full, 2 = heavy
+  min_visibility: 0.5        # en dessous : on met le coaching en pause
+
+features:
+  window_size: 30            # 30 frames = 1 s de mouvement
+  smoothing: one_euro
+
+classifier:
+  model_path: models/exercise_lstm.pt
+  run_every_n_frames: 10
+  min_confidence: 0.7
+  votes_to_switch: 5
+  classes: [squat, pushup, curl, idle]
+
+form_model:
+  model_path: models/form_rf.joblib
+
+feedback:
+  cooldown_s: 3
+  encourage_after_clean_reps: 3

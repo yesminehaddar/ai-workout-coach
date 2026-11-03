@@ -1,0 +1,22 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8501:8501"          # http://localhost:8501
+    env_file: .env
+    volumes:
+      - ./data/db:/app/data/db   # base SQLite persistante
+      - ./models:/app/models     # modèles entraînés
+      - ./configs:/app/configs   # règles modifiables sans rebuild
+    depends_on:
+      - mlflow
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.12.1
+    command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlflow/mlflow.db --default-artifact-root /mlflow/artifacts
+    ports:
+      - "5000:5000"          # http://localhost:5000
+    volumes:
+      - ./mlruns:/mlflow
