@@ -1,8 +1,10 @@
-# Seuils de départ, à ajuster sur nos enregistrements.
+# Seuils réglés sur le dataset Mendeley (vues de profil ; + diagonale pour la pompe), 9 nov. 2026.
+# Médianes par clip : squat genou 66-72° en bas / ~175° en haut ; pompe coude 72-79° / ~168° ;
+# curl coude 57-65° / ~168°. Voir scripts/eval_rep_counter.py.
 rep_counter:
   squat:  {angle: knee,  top_above: 160, bottom_below: 100}
-  pushup: {angle: elbow, top_above: 155, bottom_below: 90}
-  curl:   {angle: elbow, top_above: 150, bottom_below: 50}
+  pushup: {angle: elbow, top_above: 150, bottom_below: 100}
+  curl:   {angle: elbow, top_above: 145, bottom_below: 80}
 
 form_rules:
   squat:

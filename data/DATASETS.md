@@ -1,7 +1,7 @@
 # Datasets open source (téléchargeables sans compte)
 
-Lancer : `python scripts/download_datasets.py` (ou `make data`). Tout arrive dans `data/raw/`
-(ignoré par Git).
+Les données vont dans `data/raw/` (ignoré par Git). Le script de téléchargement d'origine a été perdu
+(jamais enregistré dans Git) ; état actuel et liens manuels : `DATASETS_STATUS.md`.
 
 | Dataset | Pourquoi pour nous | Contenu | Licence |
 |---|---|---|---|

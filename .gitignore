@@ -11,3 +11,10 @@ data/db/*.db
 !**/.gitkeep
 .pytest_cache/
 .DS_Store
+
+# Généré (scripts/render_keypoints.py, scripts/eval_rep_counter.py)
+data/keypoint_previews/
+# Modèle de pose MediaPipe (téléchargé, voir README)
+models/*.task
+*.egg-info/
+.ruff_cache/

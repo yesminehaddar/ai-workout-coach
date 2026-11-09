@@ -6,3 +6,4 @@ data/processed
 mlruns
 notebooks
 .git
+data/keypoint_previews
