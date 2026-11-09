@@ -1,22 +1,19 @@
-# État des datasets (contrôle du 3 novembre 2026, ~02h20)
+# État des datasets (mis à jour le 9 novembre 2026)
 
-## ✅ Fitness exercises, good/bad form (Mendeley) — COMPLET
-`data/raw/fitness_form/` : **1 042 vidéos, 2,4 Go**, aucun fichier vide, aucun échec.
+## ✅ Fitness exercises, good/bad form (Mendeley) : installé
+`data/raw/fitness_form/` : **1 042 fichiers, 2,4 Go**, 26 sujets, 7 exercices, 3 vues.
+Noms : `subject_XXX_<exercice>_<good|bad>_<front|side|diagonal>.mp4`.
 
-| Exercice | good | bad |
-|---|---|---|
-| squat | 75 | 75 |
-| push_up | 72 | 72 |
-| bicep_curl | 74 (+1 nommé « bicep ») | 75 |
-| shoulder (press) | 75 | 75 |
-| tricep | 77 | 77 |
-| back (row) | 72 | 72 |
-| abs (side bend) | 75 | 75 |
+- **1 fichier corrompu** : `subject_024_back_good_diagonal.mp4` (404 octets ; le serveur a renvoyé
+  « Service Unavailable » au lieu de la vidéo). Exclu. Pour le récupérer : le supprimer et le
+  re-télécharger depuis Mendeley.
+- Résolutions variées : 717 vidéos en 810×1440, les autres de 348×624 à 1620×2880 (quelques-unes en paysage).
 
-Noms : `subject_XXX_<exercice>_<good|bad>_<front|side|diagonal>.mp4` (26 sujets).
+## ✅ Extraction
+`data/processed/all.parquet` : 445 208 frames, 1 041 vidéos, pose détectée sur 99,9 % des frames.
+Qualité par clip : `data/keypoint_previews/quality_report.csv` (`make previews`).
+Vues peu fiables : pompe de face (98 % de clips douteux), curl de face (52 %).
 
-## ⏳ Penn Action — À RELANCER
-Échec : le serveur de l'UPenn n'envoie pas tout son certificat HTTPS et Python le refuse
-(`CERTIFICATE_VERIFY_FAILED`). Le script utilise maintenant `curl.exe` de Windows, qui gère ce cas
-(la vérification de sécurité reste active).
-→ Double-cliquer **`telecharger_penn_action.bat`** (à la racine du projet).
+## ⏸ Penn Action : non installé (optionnel)
+Échecs de téléchargement (certificat HTTPS du serveur UPenn, puis réseau).
+Téléchargement manuel : https://www.cis.upenn.edu/~kostas/Penn_Action.tar.gz → `data/raw/penn_action/`.
