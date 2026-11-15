@@ -19,3 +19,4 @@ models/*.task
 *.egg-info/
 .ruff_cache/
 models/*.joblib
+models/*.pt

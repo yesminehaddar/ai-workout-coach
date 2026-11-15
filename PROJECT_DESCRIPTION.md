@@ -1,6 +1,6 @@
 # AI Workout Coach: full project description
 
-*Status as of 2026-11-15. Steps 1 to 5 of 8 are done, plus a visual quality check of the detections (step 3b). Anything marked **planned** is designed but not yet coded.*
+*Status as of 2026-11-15. Steps 1 to 6 of 8 are done, plus a visual quality check of the detections (step 3b). Anything marked **planned** is designed but not yet coded.*
 
 ## 1. The idea
 
@@ -59,7 +59,8 @@ Landmarks are turned into **16 numbers per frame** (`coach/features/angles.py`).
 - **One Euro filter:** removes landmark jitter without adding lag. It smooths strongly when the body is still and lightly when it moves fast.
 - **Sliding window:** keeps the last 30 frames (about 1 second) as a `(30, 16)` array for the classifier.
 
-### Stage 4: Exercise classifier (LSTM) *(planned)*
+### Stage 4: Exercise classifier (LSTM) *(done)*
+**Result** (`training/train_classifier.py`, 3 minutes on the RTX 3050): tested on 5 subjects never seen in training, **96.7% of 1-second windows** are right (push-up 100%, curl 97%, squat 93%) and **98% of clips** by majority vote. The dataset has no idle footage, so its 4 other exercises (shoulder press, tricep, back row, abs) stand in for `idle`. Validation for early stopping uses 3 other subjects. Normalization is stored inside the model.
 A small PyTorch LSTM (2 layers × 64 units, dropout 0.3) reads the 30-frame window and outputs one of `squat | pushup | curl | idle`.
 - It runs every 10 frames, not every frame.
 - The label only changes after **5 consecutive votes above 70% confidence**, which stops it flickering between exercises.
@@ -84,7 +85,7 @@ Thresholds were set from the real angle curves (`configs/rules.yaml`):
 
 **Live demo:** `python scripts/live_rep_counter.py --exercise squat` (or `pushup`, `curl`) opens the webcam and shows the skeleton, the count and the state. It runs at 32–41 FPS on the CPU.
 
-### Stage 6: Form analyzer (hybrid) *(rules done, Random Forest planned)*
+### Stage 6: Form analyzer (hybrid) *(done)*
 - **Rules** (explainable, `coach/reasoning/form_analyzer.py`): each fault has a code, a tip and a priority (1 safety, 2 range of motion, 3 tempo or placement). A rule is a line in `configs/rules.yaml` such as `min_knee > 85`, checked on the summary of each rep: the min, max and range of every feature during the rep, and its duration.
 
 | Exercise | Fault | Check | Tip | Fires on good / bad reps |
@@ -104,7 +105,7 @@ Thresholds were set from the real angle curves (`configs/rules.yaml`):
 - **How the thresholds were set.** `training/extract_rep_summaries.py` cuts every clip into reps (4,426 reps from 427 clips, `data/processed/reps.parquet`). Good and bad clips of the same person were compared to find what actually differs. Push-up: hips sag and hands sit further forward in about 85% of subjects. Curl: shorter range and faster reps. Squat: "bad" means different things for different people, so no single measure separates it. Each threshold was then set so the rule fires on only 5–9% of good reps. The dataset never says *which* fault a bad clip has, so this is the best check available.
 - **Result** (`scripts/eval_form_rules.py`, reliable views only). A clip is judged bad when more than 30% of its reps have a fault. **71% of 241 clips are classified correctly**: curl 77%, push-up 70%, squat 63%. The thresholds were tuned on the same clips, so these figures are a little optimistic.
 - Rules also give a temporary **score**: 100 minus 30 per safety fault, 20 per range fault and 10 per tempo fault.
-- **Random Forest** (200 trees, step 6): takes the summary of one rep and returns a **form score from 0 to 100**, replacing the temporary score. The rules say *what* to fix. The model says *how good* the rep was overall.
+- **Random Forest** (200 trees, one per exercise, `training/train_form_model.py`): takes the summary of one rep and returns a **form score from 0 to 100** (probability of "good"), replacing the temporary score. Cross-validated by subject (5 folds): **73% of clips right** (curl 81%, squat 67%, push-up 66%), slightly above the rules, and this time on people the model never saw. The rules say *what* to fix. The model says *how good* the rep was overall.
 
 ### Stage 7: Feedback engine *(planned)*
 Chooses **one tip at a time** so the user is not overwhelmed.
@@ -191,8 +192,8 @@ ai-workout-coach/
 ├── scripts/        render_keypoints.py, eval_rep_counter.py, eval_form_rules.py, live_rep_counter.py (done);
 │                   benchmark_fps.py, record_clip.py (stubs)
 ├── src/coach/      capture, pose, features, reasoning, feedback, db, pipeline
-├── tests/          unit tests (25 passing)
-└── training/       extract_keypoints.py, extract_rep_summaries.py (done) + training scripts (stubs)
+├── tests/          unit tests (27 passing)
+└── training/       extract_keypoints.py, extract_rep_summaries.py, train_form_model.py, train_classifier.py (done)
 ```
 The slide decks are kept outside this repository.
 
@@ -206,8 +207,8 @@ The slide decks are kept outside this repository.
 | 3b | Visual check of the detections: annotated clips, overview image, quality report for all videos | ✅ Done |
 | 4 | Rep counter: glitch filter, thresholds tuned on real curves, self-calibrating state machine, live demo script | ✅ Done |
 | 5 | Form analyzer: rules tuned and checked against the good/bad labels (71% of clips), tips and score in the live demo | ✅ Done |
-| 6 | **Train the LSTM classifier and Random Forest, split by subject, MLflow tracking** | ⏭ Next |
-| 7 | Runtime: feedback engine, pipeline, database access, Streamlit pages | Planned |
+| 6 | Train the LSTM classifier (96.7% of windows, 98% of clips) and Random Forest (73% of clips), split by subject, MLflow tracking | ✅ Done |
+| 7 | **Runtime: feedback engine, pipeline, database access, Streamlit pages** | ⏭ Next |
 | 8 | Validate on the user's own webcam clips | Planned |
 
 **First usable milestone:** the end of step 4, a webcam rep counter with no ML.

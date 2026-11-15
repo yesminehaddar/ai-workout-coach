@@ -2,7 +2,7 @@
 
 A personal trainer that runs on a laptop with a webcam. It recognizes the exercise (squat, push-up, bicep curl), counts the repetitions, judges the posture on each rep and gives one short tip at a time. Everything runs locally and in real time: no video leaves the computer.
 
-> **Status (15 November 2026):** steps 1 to 5 of 8 are done. The webcam demo counts reps and gives a posture tip and a score after each rep, without machine learning. The trained models are next. Anything marked *planned* is designed but not yet coded.
+> **Status (15 November 2026):** steps 1 to 6 of 8 are done. The webcam demo counts reps and gives a posture tip and a score after each rep. Both models are trained; wiring them into the app is next. Anything marked *planned* is designed but not yet coded.
 
 ## 1. What This Project Achieved
 
@@ -12,7 +12,8 @@ A personal trainer that runs on a laptop with a webcam. It recognizes the exerci
 4. Audited detection quality on every video with annotated clips and a quality report, and dropped the camera views that were unreliable.
 5. Built a self-calibrating rep counter (state machine, no ML): 88% of 296 clips within ±1 rep of an independent count, 32 to 41 FPS live on a CPU.
 6. Built a rule-based form analyzer: 11 rules tuned on the good/bad labels, 71% of 241 clips classified correctly, with a tip and a score per rep in the live demo.
-7. Designed the full application: LSTM exercise classifier, hybrid form analyzer, feedback engine, SQLite history and a Streamlit interface.
+7. Trained the LSTM exercise classifier: 96.7% of 1-second windows and 98% of clips right on 5 subjects never seen in training (3 min on the GPU), and the Random Forest form score: 73% of clips right on held-out subjects (curl 81%, squat 67%, push-up 66%).
+8. Designed the full application: hybrid form analyzer, feedback engine, SQLite history and a Streamlit interface.
 
 ## 2. Verified Results
 
@@ -24,8 +25,10 @@ A personal trainer that runs on a laptop with a webcam. It recognizes the exerci
 | Rep counter, all clips (296, side and diagonal views) | 88% within ±1 rep |
 | Rep counter, side view | curl 100%, squat 88%, push-up 75% |
 | Form rules, clips classified good/bad (241) | 71%: curl 77%, push-up 70%, squat 63% |
+| Exercise classifier (LSTM), 5 unseen subjects | 96.7% of windows, 98% of clips |
+| Form score (Random Forest), held-out subjects | 73% of clips (curl 81%, squat 67%, push-up 66%) |
 | Live demo speed | 32 to 41 FPS on the CPU |
-| Unit tests | 25 passing |
+| Unit tests | 27 passing |
 
 The dataset has no hand-counted reps, so the counter is compared with an independent offline peak count of each angle curve.
 
@@ -39,8 +42,8 @@ The dataset has no hand-counted reps, so the counter is compared with an indepen
 | 3b | Visual check of the detections: annotated clips, overview image, quality report | ✅ Done |
 | 4 | Rep counter: glitch filter, thresholds tuned on real curves, self-calibrating state machine, live demo | ✅ Done |
 | 5 | Form analyzer: 11 rules tuned and checked against the good and bad labels, tips and score in the live demo | ✅ Done |
-| 6 | Train the LSTM classifier and the Random Forest, split by subject, MLflow tracking | ⏭ Next |
-| 7 | Runtime: feedback engine, pipeline, database access, Streamlit pages | Planned |
+| 6 | Train the LSTM classifier and the Random Forest, split by subject, MLflow tracking | ✅ Done |
+| 7 | Runtime: feedback engine, pipeline, database access, Streamlit pages | ⏭ Next |
 | 8 | Validate on our own webcam clips | Planned |
 
 ## 4. How It Works
@@ -120,11 +123,11 @@ Thresholds were set from the real angle curves and live in `configs/rules.yaml`.
 
 - Every clip is cut into reps (4,426 reps, `data/processed/reps.parquet`). Good and bad clips of the same person were compared to find what differs: push-up hips sag and hands too far forward, curl reps partial and rushed; squat faults vary by person.
 - 11 rules in `configs/rules.yaml` (`"<measure> <op> <value>"`), each firing on only 5-9% of good reps. A clip is judged bad when over 30% of its reps have a fault: 71% of 241 clips correct (curl 77%, push-up 70%, squat 63%).
-- A Random Forest (200 trees, next) that scores each rep from 0 to 100, replacing the temporary rule-based score. The rules say what to fix, the model says how good the rep was overall.
+- A Random Forest (200 trees, one per exercise, `training/train_form_model.py`) scores each rep from 0 to 100. Cross-validated by subject: 73% of clips right. It replaces the temporary rule-based score. The rules say what to fix, the model says how good the rep was overall.
 
-### Phase F: Exercise classifier, feedback and app (planned)
+### Phase F: Exercise classifier (done), feedback and app (planned)
 
-- PyTorch LSTM (2 layers x 64 units) on the 30-frame window: `squat`, `pushup`, `curl` or `idle`. The label changes only after 5 consecutive votes above 70% confidence. Exported as TorchScript.
+- PyTorch LSTM (2 layers x 64 units, `training/train_classifier.py`) on the 30-frame window: `squat`, `pushup`, `curl` or `idle` (the 4 other dataset exercises stand in for idle). The label changes only after 5 consecutive votes above 70% confidence. Exported as TorchScript. On 5 unseen subjects: 96.7% of windows (squat 93%, curl 97%, push-up 100%) and 98% of clips.
 - Feedback engine: one tip at a time, safety before depth before tempo, 3-second cooldown, encouragement after 3 clean reps.
 - Streamlit interface (live, report, history) through streamlit-webrtc, and a SQLite history (users, sessions, sets, reps, form events) with SQLAlchemy. The schema is done.
 
