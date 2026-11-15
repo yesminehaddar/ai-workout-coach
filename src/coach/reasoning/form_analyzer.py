@@ -76,10 +76,13 @@ class FormAnalyzer:
         return sorted(faults, key=lambda f: f.priority)
 
     def form_score(self, rep_summary: dict, faults: list[Fault] | None = None) -> float:
-        """Score 0-100. Avec un modèle : probabilité « good » x 100. Sinon : 100 moins une
-        pénalité par défaut détecté (30 sécurité, 20 amplitude, 10 tempo / placement)."""
-        if self.model is not None:
-            raise NotImplementedError("Score par Random Forest : étape 6")
+        """Score 0-100. Avec le modèle (training/train_form_model.py) : probabilité « good » x 100.
+        Sinon : 100 moins une pénalité par défaut (30 sécurité, 20 amplitude, 10 tempo / placement)."""
+        entry = (self.model or {}).get(rep_summary.get("exercise"))
+        if entry is not None:
+            m = rep_metrics(rep_summary)
+            x = [[0.0 if math.isnan(v := m.get(c, math.nan)) else v for c in entry["columns"]]]
+            return float(100.0 * entry["model"].predict_proba(x)[0][1])
         if faults is None:
             faults = self.check_rules(rep_summary["exercise"], rep_summary)
         return max(0.0, 100.0 - sum(PENALTY.get(f.priority, 10.0) for f in faults))
