@@ -1,4 +1,4 @@
-.PHONY: install run up down test lint extract previews eval-reps live train benchmark
+.PHONY: install run up down test lint extract previews eval-reps reps eval-form live train benchmark
 
 install:      ## Installer les dépendances + le package coach (mode éditable)
 	pip install -r requirements-dev.txt
@@ -28,7 +28,13 @@ previews:     ## Vidéos annotées + rapport de qualité (data/keypoint_previews
 eval-reps:    ## Évaluer le compteur de répétitions sur le dataset
 	python scripts/eval_rep_counter.py
 
-live:         ## Démo webcam du compteur (EX=squat|pushup|curl)
+reps:         ## Découper les clips en reps -> data/processed/reps.parquet
+	python training/extract_rep_summaries.py
+
+eval-form:    ## Vérifier les règles de posture contre les étiquettes good/bad
+	python scripts/eval_form_rules.py
+
+live:         ## Démo webcam du compteur + conseils (EX=squat|pushup|curl)
 	python scripts/live_rep_counter.py --exercise $(or $(EX),squat)
 
 train:        ## Entraîner les deux modèles

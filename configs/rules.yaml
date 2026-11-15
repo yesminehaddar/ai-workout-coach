@@ -6,13 +6,24 @@ rep_counter:
   pushup: {angle: elbow, top_above: 150, bottom_below: 100}
   curl:   {angle: elbow, top_above: 145, bottom_below: 80}
 
+# Règles de posture, vérifiées sur le résumé de chaque rep (min_X, max_X, range_X = max - min
+# de la feature X pendant la rep, tempo_s = durée de la rep). Syntaxe : "<mesure> <op> <valeur>".
+# priority : 1 = sécurité, 2 = amplitude, 3 = tempo / placement.
+# Seuils réglés le 15 nov. 2026 sur les reps du dataset (vues de profil ; + diagonale pompe/curl) :
+# chaque règle se déclenche sur 5-9 % des reps « good » (taux entre crochets : good / bad).
+# Voir scripts/eval_form_rules.py.
 form_rules:
   squat:
-    - {code: SQUAT_SHALLOW, check: "min_knee > 100",  tip: "Go a bit lower", priority: 2}
-    - {code: SQUAT_LEAN,    check: "torso_lean > 45", tip: "Chest up!",      priority: 1}
+    - {code: SQUAT_LEAN,          check: "max_torso_lean > 55",   tip: "Chest up!",                     priority: 1}  # [7% / 5%] sécurité, ne sépare pas good/bad ici
+    - {code: SQUAT_SHALLOW,       check: "min_knee > 85",         tip: "Go a bit lower",                priority: 2}  # [8% / 25%]
+    - {code: SQUAT_KNEES_FORWARD, check: "max_knee_forward > 0.52", tip: "Sit back, knees behind toes", priority: 2}  # [5% / 16%]
+    - {code: SQUAT_FAST,          check: "tempo_s < 1.07",        tip: "Slow down, control the descent", priority: 3}  # [6% / 25%]
   pushup:
-    - {code: PUSHUP_SAG,     check: "body_line < 160", tip: "Tighten your core", priority: 1}
-    - {code: PUSHUP_SHALLOW, check: "min_elbow > 90",  tip: "Lower your chest",  priority: 2}
+    - {code: PUSHUP_SAG,           check: "min_body_line < 148",  tip: "Tighten your core, hips up",   priority: 1}  # [6% / 28%]
+    - {code: PUSHUP_SHALLOW,       check: "min_elbow > 100",      tip: "Lower your chest",             priority: 2}  # [9% / 25%]
+    - {code: PUSHUP_HANDS_FORWARD, check: "max_wrist_forward > -0.02", tip: "Hands under your shoulders", priority: 3}  # [5% / 15%]
   curl:
-    - {code: CURL_SWING,   check: "arm_swing > 20", tip: "Keep elbows still",  priority: 1}
-    - {code: CURL_PARTIAL, check: "min_elbow > 50", tip: "Squeeze to the top", priority: 2}
+    - {code: CURL_BODY_SWING, check: "range_torso_lean > 6.5", tip: "Don't swing your body",     priority: 1}  # [6% / 13%]
+    - {code: CURL_SWING,      check: "range_shoulder > 19",    tip: "Keep elbows still",         priority: 1}  # [5% / 18%]
+    - {code: CURL_PARTIAL,    check: "min_elbow > 70",         tip: "Squeeze to the top",        priority: 2}  # [7% / 30%]
+    - {code: CURL_FAST,       check: "tempo_s < 1.0",          tip: "Slow down, control the weight", priority: 3}  # [4% / 36%]

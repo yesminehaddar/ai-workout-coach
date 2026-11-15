@@ -2,7 +2,7 @@
 
 A personal trainer that runs on a laptop with a webcam. It recognizes the exercise (squat, push-up, bicep curl), counts the repetitions, judges the posture on each rep and gives one short tip at a time. Everything runs locally and in real time: no video leaves the computer.
 
-> **Status (9 November 2026):** steps 1 to 4 of 8 are done. The webcam rep counter works today, without machine learning. Posture analysis and the trained models are next. Anything marked *planned* is designed but not yet coded.
+> **Status (15 November 2026):** steps 1 to 5 of 8 are done. The webcam demo counts reps and gives a posture tip and a score after each rep, without machine learning. The trained models are next. Anything marked *planned* is designed but not yet coded.
 
 ## 1. What This Project Achieved
 
@@ -11,7 +11,8 @@ A personal trainer that runs on a laptop with a webcam. It recognizes the exerci
 3. Extracted the features of the whole dataset into Parquet: 445,208 frames from 1,041 videos, pose detected in 99.9% of frames.
 4. Audited detection quality on every video with annotated clips and a quality report, and dropped the camera views that were unreliable.
 5. Built a self-calibrating rep counter (state machine, no ML): 88% of 296 clips within ±1 rep of an independent count, 32 to 41 FPS live on a CPU.
-6. Designed the full application: LSTM exercise classifier, hybrid form analyzer, feedback engine, SQLite history and a Streamlit interface.
+6. Built a rule-based form analyzer: 11 rules tuned on the good/bad labels, 71% of 241 clips classified correctly, with a tip and a score per rep in the live demo.
+7. Designed the full application: LSTM exercise classifier, hybrid form analyzer, feedback engine, SQLite history and a Streamlit interface.
 
 ## 2. Verified Results
 
@@ -22,8 +23,9 @@ A personal trainer that runs on a laptop with a webcam. It recognizes the exerci
 | Extraction time | 61 minutes on 6 CPU cores |
 | Rep counter, all clips (296, side and diagonal views) | 88% within ±1 rep |
 | Rep counter, side view | curl 100%, squat 88%, push-up 75% |
+| Form rules, clips classified good/bad (241) | 71%: curl 77%, push-up 70%, squat 63% |
 | Live demo speed | 32 to 41 FPS on the CPU |
-| Unit tests | 17 passing |
+| Unit tests | 25 passing |
 
 The dataset has no hand-counted reps, so the counter is compared with an independent offline peak count of each angle curve.
 
@@ -36,8 +38,8 @@ The dataset has no hand-counted reps, so the counter is compared with an indepen
 | 3 | Offline extraction of all videos to Parquet | ✅ Done |
 | 3b | Visual check of the detections: annotated clips, overview image, quality report | ✅ Done |
 | 4 | Rep counter: glitch filter, thresholds tuned on real curves, self-calibrating state machine, live demo | ✅ Done |
-| 5 | Form analyzer: rules checked against the good and bad labels | ⏭ Next |
-| 6 | Train the LSTM classifier and the Random Forest, split by subject, MLflow tracking | Planned |
+| 5 | Form analyzer: 11 rules tuned and checked against the good and bad labels, tips and score in the live demo | ✅ Done |
+| 6 | Train the LSTM classifier and the Random Forest, split by subject, MLflow tracking | ⏭ Next |
 | 7 | Runtime: feedback engine, pipeline, database access, Streamlit pages | Planned |
 | 8 | Validate on our own webcam clips | Planned |
 
@@ -114,10 +116,11 @@ Goal: count reps with no machine learning.
 
 Thresholds were set from the real angle curves and live in `configs/rules.yaml`.
 
-### Phase E: Form analyzer (next)
+### Phase E: Form analyzer (rules done)
 
-- Rules, each with a fault code, a tip and a priority: `SQUAT_SHALLOW`, `SQUAT_LEAN`, `PUSHUP_SAG`, `PUSHUP_SHALLOW`, `CURL_SWING`, `CURL_PARTIAL`.
-- A Random Forest (200 trees) that scores each rep from 0 to 100. The rules say what to fix, the model says how good the rep was overall.
+- Every clip is cut into reps (4,426 reps, `data/processed/reps.parquet`). Good and bad clips of the same person were compared to find what differs: push-up hips sag and hands too far forward, curl reps partial and rushed; squat faults vary by person.
+- 11 rules in `configs/rules.yaml` (`"<measure> <op> <value>"`), each firing on only 5-9% of good reps. A clip is judged bad when over 30% of its reps have a fault: 71% of 241 clips correct (curl 77%, push-up 70%, squat 63%).
+- A Random Forest (200 trees, next) that scores each rep from 0 to 100, replacing the temporary rule-based score. The rules say what to fix, the model says how good the rep was overall.
 
 ### Phase F: Exercise classifier, feedback and app (planned)
 
@@ -141,6 +144,8 @@ Thresholds were set from the real angle curves and live in `configs/rules.yaml`.
 | `training/extract_keypoints.py` | Run MediaPipe over every video into Parquet | Done |
 | `scripts/render_keypoints.py` | Draw the skeleton on clips, write the quality report | Done |
 | `scripts/eval_rep_counter.py` | Evaluate the rep counter against an offline peak count | Done |
+| `training/extract_rep_summaries.py` | Cut every clip into reps, one summary row per rep | Done |
+| `scripts/eval_form_rules.py` | Check the posture rules against the good/bad labels | Done |
 | `scripts/live_rep_counter.py` | Webcam demo: skeleton, count and state | Done |
 | `scripts/benchmark_fps.py`, `scripts/record_clip.py` | Speed benchmark, record own clips | Planned |
 
@@ -169,6 +174,8 @@ Stand side-on to the camera: detection is reliable from the side, not from the f
 make extract          # videos to Parquet
 make previews         # annotated clips and quality report
 make eval-reps        # rep counter evaluation
+make reps             # cut clips into reps
+make eval-form        # posture rules evaluation
 ```
 
 **With Docker** (Streamlit app on port 8501, MLflow on port 5000):

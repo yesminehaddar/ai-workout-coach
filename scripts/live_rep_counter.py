@@ -1,4 +1,5 @@
-"""Démo du compteur de répétitions (sans ML) : webcam ou vidéo -> squelette + compteur.
+"""Démo du compteur de répétitions et des conseils de posture (sans ML) :
+webcam ou vidéo -> squelette + compteur + un conseil et un score après chaque rep.
 
 Le choix de l'exercice est manuel ici (le classifieur LSTM viendra à l'étape 6).
 Placez-vous DE PROFIL face à la caméra : c'est la vue où la détection est fiable.
@@ -11,19 +12,17 @@ Touches : q = quitter, r = remettre à zéro.
 """
 import argparse
 import time
-from pathlib import Path
 
 import cv2
-import yaml
 
+from coach.config import load_config
 from coach.features.angles import compute_features
 from coach.features.smoothing import FeatureSmoother, JumpFilter
 from coach.pose.estimator import PoseEstimator
 from coach.pose.skeleton import draw_skeleton
 from coach.pose.skeleton import put_text as text
+from coach.reasoning.form_analyzer import FormAnalyzer
 from coach.reasoning.rep_counter import RepCounter
-
-ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
@@ -33,8 +32,7 @@ def main():
     ap.add_argument("--no-display", action="store_true")
     args = ap.parse_args()
 
-    rules = yaml.safe_load((ROOT / "configs" / "rules.yaml").read_text(encoding="utf-8"))
-    app = yaml.safe_load((ROOT / "configs" / "app.yaml").read_text(encoding="utf-8"))
+    rules, app = load_config("rules"), load_config("app")
     th = rules["rep_counter"][args.exercise]
 
     is_cam = args.source.isdigit()
@@ -49,6 +47,8 @@ def main():
     est = PoseEstimator(min_visibility=app["pose"]["min_visibility"])
     jf, sm = JumpFilter(), FeatureSmoother()
     counter = RepCounter(args.exercise, th, fps=fps_src)
+    analyzer = FormAnalyzer(rules)
+    scores, fault_counts = [], {}
     last_msg, n, t0 = "", 0, time.time()
 
     while True:
@@ -69,7 +69,17 @@ def main():
             angle = f[th["angle"]]
             ev = counter.update(f, timestamp=t)
             if ev:
-                last_msg = f"Rep {ev['rep_index']}!" if ev["counted"] else "Partial rep - go further"
+                faults = analyzer.check_rules(args.exercise, ev)
+                score = analyzer.form_score(ev, faults)
+                head = f"Rep {ev['rep_index']}" if ev["counted"] else "Partial rep"
+                tip = faults[0].tip if faults else ("Good rep!" if ev["counted"] else "Go further")
+                last_msg = f"{head} ({score:.0f}/100): {tip}"
+                if ev["counted"]:
+                    scores.append(score)
+                for flt in faults:
+                    fault_counts[flt.code] = fault_counts.get(flt.code, 0) + 1
+                if args.no_display:
+                    print(last_msg)
             draw_skeleton(frame, lm)
 
         if not args.no_display:
@@ -86,6 +96,8 @@ def main():
                 break
             if key == ord("r"):
                 counter.reset()
+                scores.clear()
+                fault_counts.clear()
 
     cap.release()
     est.close()
@@ -93,6 +105,8 @@ def main():
     elapsed = time.time() - t0
     print(f"Reps: {counter.count}  partial: {counter.partial_count}  "
           f"({n} frames, {n / max(elapsed, 1e-6):.1f} FPS de traitement)")
+    if scores:
+        print(f"Score moyen : {sum(scores) / len(scores):.0f}/100   défauts : {fault_counts or 'aucun'}")
 
 
 if __name__ == "__main__":
