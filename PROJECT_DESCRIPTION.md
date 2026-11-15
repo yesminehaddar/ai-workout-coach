@@ -70,7 +70,7 @@ A small PyTorch LSTM (2 layers × 64 units, dropout 0.3) reads the 30-frame wind
 Follows the movement through four states: `TOP → GOING_DOWN → BOTTOM → GOING_UP → TOP`. Returning to TOP is **+1 rep**. If the user turns back before reaching BOTTOM, it counts as a **partial rep** and is not counted. It needs no machine learning.
 - Nothing is counted until the user has been seen in the starting position.
 - A **glitch filter** first discards frames where an angle jumps by more than 40° (a detection error), unless the jump lasts more than 3 frames.
-- The **top threshold calibrates itself** to the user: if their arms or legs never straighten to the configured value, it drops to 10° below the highest angle they reached in the last 5 seconds. The bottom threshold stays fixed, so shallow reps are still flagged.
+- Both thresholds **adapt to the user** (fixed 15 Nov 2026). The 2D angle depends on the camera view: from the diagonal, a full push-up can look like 72–110° and a deep squat like 120°, so fixed thresholds missed most reps. When the angle has moved by at least 25° in the last 5 seconds, a rep counts once the angle drops past the midpoint of that person's own range (5th to 95th percentile, so one bad frame cannot skew it), and the top sits 15% of the range below their highest angle. Below 25° of movement the fixed thresholds apply. A shallow rep is therefore counted, and the form analyzer says "go lower". The first reps are re-judged when they end, once the calibration has seen them.
 - Each finished rep returns a summary (min and max of every feature, tempo) that the form analyzer will use.
 
 Thresholds were set from the real angle curves (`configs/rules.yaml`):
@@ -81,7 +81,7 @@ Thresholds were set from the real angle curves (`configs/rules.yaml`):
 | Push-up | elbow | 150° | 100° | 72–79° |
 | Curl | elbow | 145° | 80° | 57–65° |
 
-**Evaluation** (`scripts/eval_rep_counter.py`, 296 clips, side and diagonal views). The dataset has no hand counts, so the counter is compared with an independent offline peak count of each angle curve. **88% of clips are within ±1 movement.** Side view: curl 100%, squat 88%, push-up 75%. From the diagonal view, many squats come out as "partial" because the camera angle makes the knee look less bent.
+**Evaluation** (`scripts/eval_rep_counter.py`, 296 clips, side and diagonal views), on the reps actually shown to the user. The reference is an offline peak count of each angle curve, not a hand count. **79% of clips exact, 92% within ±1 rep.** Side view: curl 100%, squat 96%, push-up 88%; diagonal: curl 100%, push-up 90%, squat 78%. *Correction:* the 88% previously reported here counted partial reps as reps; on counted reps alone the old counter was only 58% exact and 70% within ±1. A hand check of 8 disputed clips on contact sheets confirmed the fix on clear clips (e.g. 16 real push-ups: counter 16, reference 2) and showed the remaining errors: shallow bad-form reps and a detection glitch on a clip's very first frame. Squats where the knees barely bend (about 25° of movement) are still not counted.
 
 **Live demo:** `python scripts/live_rep_counter.py --exercise squat` (or `pushup`, `curl`) opens the webcam and shows the skeleton, the count and the state. It runs at 32–41 FPS on the CPU.
 
@@ -102,10 +102,10 @@ Thresholds were set from the real angle curves (`configs/rules.yaml`):
 | | `CURL_PARTIAL` | lowest elbow angle > 70° | Squeeze to the top | 7% / 30% |
 | | `CURL_FAST` | rep < 1.0 s | Slow down, control the weight | 4% / 36% |
 
-- **How the thresholds were set.** `training/extract_rep_summaries.py` cuts every clip into reps (4,426 reps from 427 clips, `data/processed/reps.parquet`). Good and bad clips of the same person were compared to find what actually differs. Push-up: hips sag and hands sit further forward in about 85% of subjects. Curl: shorter range and faster reps. Squat: "bad" means different things for different people, so no single measure separates it. Each threshold was then set so the rule fires on only 5–9% of good reps. The dataset never says *which* fault a bad clip has, so this is the best check available.
-- **Result** (`scripts/eval_form_rules.py`, reliable views only). A clip is judged bad when more than 30% of its reps have a fault. **71% of 241 clips are classified correctly**: curl 77%, push-up 70%, squat 63%. The thresholds were tuned on the same clips, so these figures are a little optimistic.
+- **How the thresholds were set.** `training/extract_rep_summaries.py` cuts every clip into reps (4,620 reps from 434 clips, `data/processed/reps.parquet`). Good and bad clips of the same person were compared to find what actually differs. Push-up: hips sag and hands sit further forward in about 85% of subjects. Curl: shorter range and faster reps. Squat: "bad" means different things for different people, so no single measure separates it. Each threshold was then set so the rule fires on only 5–9% of good reps. The dataset never says *which* fault a bad clip has, so this is the best check available.
+- **Result** (`scripts/eval_form_rules.py`, reliable views only). A clip is judged bad when more than 30% of its reps have a fault. **72% of 244 clips are classified correctly**: curl 76%, push-up 71%, squat 65%. The thresholds were tuned on the same clips, so these figures are a little optimistic.
 - Rules also give a temporary **score**: 100 minus 30 per safety fault, 20 per range fault and 10 per tempo fault.
-- **Random Forest** (200 trees, one per exercise, `training/train_form_model.py`): takes the summary of one rep and returns a **form score from 0 to 100** (probability of "good"), replacing the temporary score. Cross-validated by subject (5 folds): **73% of clips right** (curl 81%, squat 67%, push-up 66%), slightly above the rules, and this time on people the model never saw. The rules say *what* to fix. The model says *how good* the rep was overall.
+- **Random Forest** (200 trees, one per exercise, `training/train_form_model.py`): takes the summary of one rep and returns a **form score from 0 to 100** (probability of "good"), replacing the temporary score. Cross-validated by subject (5 folds): **74% of clips right** (curl 82%, squat 71%, push-up 68%), slightly above the rules, and this time on people the model never saw. The rules say *what* to fix. The model says *how good* the rep was overall.
 
 ### Stage 7: Feedback engine *(planned)*
 Chooses **one tip at a time** so the user is not overwhelmed.
@@ -205,9 +205,9 @@ The slide decks are kept outside this repository.
 | 2 | Pose estimator, features, smoothing, window, tests | ✅ Done |
 | 3 | Offline extraction of all videos to Parquet | ✅ Done |
 | 3b | Visual check of the detections: annotated clips, overview image, quality report for all videos | ✅ Done |
-| 4 | Rep counter: glitch filter, thresholds tuned on real curves, self-calibrating state machine, live demo script | ✅ Done |
-| 5 | Form analyzer: rules tuned and checked against the good/bad labels (71% of clips), tips and score in the live demo | ✅ Done |
-| 6 | Train the LSTM classifier (96.7% of windows, 98% of clips) and Random Forest (73% of clips), split by subject, MLflow tracking | ✅ Done |
+| 4 | Rep counter: glitch filter, thresholds tuned on real curves, state machine with thresholds that adapt to the user and the camera view (79% exact, 92% within ±1), live demo script | ✅ Done |
+| 5 | Form analyzer: rules tuned and checked against the good/bad labels (72% of clips), tips and score in the live demo | ✅ Done |
+| 6 | Train the LSTM classifier (96.7% of windows, 98% of clips) and Random Forest (74% of clips), split by subject, MLflow tracking | ✅ Done |
 | 7 | **Runtime: feedback engine, pipeline, database access, Streamlit pages** | ⏭ Next |
 | 8 | Validate on the user's own webcam clips | Planned |
 

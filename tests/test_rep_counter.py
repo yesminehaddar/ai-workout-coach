@@ -34,10 +34,11 @@ def test_full_rep_counts():
 
 def test_partial_rep_not_counted():
     c = RepCounter("squat", SQUAT)
-    ev = feed(c, np.concatenate([[175] * 5, rep(120), rep(70)]))
-    assert c.count == 1
+    # Après des reps profondes, une demi-rep (175 -> 130) reste « partial ».
+    ev = feed(c, np.concatenate([[175] * 5, rep(70), rep(70), rep(130), rep(70)]))
+    assert c.count == 3
     assert c.partial_count == 1
-    assert ev[0]["counted"] is False and ev[1]["counted"] is True
+    assert [e["counted"] for e in ev] == [True, True, False, True]
 
 
 def test_noise_near_top_is_ignored():
@@ -69,7 +70,7 @@ def test_top_calibrates_when_never_fully_extended():
     for i, a in enumerate(np.concatenate([[145] * 10] + [one] * 3)):
         c.update({"elbow": float(a)}, timestamp=i / 15)
     assert c.count == 3
-    assert c.effective_top == pytest.approx(135)
+    assert 120 < c.effective_top < 150
 
 
 def test_jump_filter_accepts_persistent_change():
@@ -77,3 +78,21 @@ def test_jump_filter_accepts_persistent_change():
     out = [jf({"knee": v})["knee"] for v in [170, 170, 60, 60, 60, 60, 60]]
     assert out[2] == 170          # premier saut rejeté
     assert out[-1] == 60          # mais accepté s'il persiste
+
+
+def test_foreshortened_view_still_counts():
+    """Pompe de biais : le bras semble aller de 72 à 110° seulement. Seuils relatifs -> comptée."""
+    c = RepCounter("pushup", {"angle": "elbow", "top_above": 150, "bottom_below": 100})
+    one = np.concatenate([np.linspace(110, 72, 8), np.linspace(72, 110, 8)])
+    for i, a in enumerate(np.concatenate([[110] * 10] + [one] * 6)):
+        c.update({"elbow": float(a)}, timestamp=i / 15)
+    assert c.count >= 5
+
+
+def test_small_wobble_is_not_a_rep():
+    """Moins de min_amplitude (25°) de mouvement : rien n'est compté."""
+    c = RepCounter("squat", SQUAT)
+    wob = np.concatenate([np.linspace(178, 160, 10), np.linspace(160, 178, 10)])
+    for i, a in enumerate(np.concatenate([[178] * 10] + [wob] * 5)):
+        c.update({"knee": float(a)}, timestamp=i / 15)
+    assert c.count == 0
