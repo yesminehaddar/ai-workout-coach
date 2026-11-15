@@ -5,7 +5,7 @@ et corrige la posture en direct. Tout tourne en local, en temps réel.
 
 Description complète (concept, pipeline, données, décisions, avancement) : [PROJECT_DESCRIPTION.md](PROJECT_DESCRIPTION.md).
 
-## Avancement (9 novembre 2026)
+## Avancement (15 novembre 2026)
 
 | # | Étape | État |
 |---|---|---|
@@ -13,8 +13,8 @@ Description complète (concept, pipeline, données, décisions, avancement) : [P
 | 2 | Détection de pose (MediaPipe) + 16 features + filtre One Euro + fenêtre de 30 frames | ✅ |
 | 3 | Extraction de toutes les vidéos vers Parquet (445 208 frames, 1 041 vidéos) + contrôle visuel | ✅ |
 | 4 | Compteur de répétitions (88 % des clips à ±1 répétition) + démo webcam | ✅ |
-| 5 | Analyse de la posture (règles) | ⏭ Prochaine |
-| 6 | Entraînement : LSTM (exercice) + Random Forest (score de forme), séparation par sujet, MLflow | Prévue |
+| 5 | Analyse de la posture : 11 règles réglées sur le dataset (71 % des clips bien classés good/bad) | ✅ |
+| 6 | Entraînement : LSTM (exercice) + Random Forest (score de forme), séparation par sujet, MLflow | ⏭ Prochaine |
 | 7 | Application : moteur de conseils, pipeline, base SQLite, pages Streamlit | Prévue |
 | 8 | Validation sur nos propres vidéos webcam | Prévue |
 
@@ -26,7 +26,8 @@ La détection est fiable de profil (curl, squat) mais pas de face pour les pompe
 ```bash
 make install          # pip install -r requirements-dev.txt puis pip install -e .
 make test
-make live EX=squat    # démo webcam : squat, pushup ou curl  (q = quitter, r = remettre à zéro)
+make live EX=squat    # démo webcam : squat, pushup ou curl, avec un conseil et un score par rep
+                      # (q = quitter, r = remettre à zéro)
 ```
 
 Le modèle de pose (`models/pose_landmarker_full.task`, ignoré par Git) se télécharge ici :
@@ -39,7 +40,8 @@ docker compose up --build
 ```
 
 Autres commandes : `make lint`, `make extract` (vidéos → Parquet), `make previews` (squelette dessiné
-sur les vidéos + rapport de qualité), `make eval-reps` (évaluation du compteur).
+sur les vidéos + rapport de qualité), `make eval-reps` (évaluation du compteur),
+`make reps` (découpage en répétitions) puis `make eval-form` (évaluation des règles de posture).
 
 ## Données
 

@@ -1,6 +1,6 @@
 # AI Workout Coach: full project description
 
-*Status as of 2026-11-09. Steps 1 to 4 of 8 are done, plus a visual quality check of the detections (step 3b). Anything marked **planned** is designed but not yet coded.*
+*Status as of 2026-11-15. Steps 1 to 5 of 8 are done, plus a visual quality check of the detections (step 3b). Anything marked **planned** is designed but not yet coded.*
 
 ## 1. The idea
 
@@ -84,13 +84,27 @@ Thresholds were set from the real angle curves (`configs/rules.yaml`):
 
 **Live demo:** `python scripts/live_rep_counter.py --exercise squat` (or `pushup`, `curl`) opens the webcam and shows the skeleton, the count and the state. It runs at 32–41 FPS on the CPU.
 
-### Stage 6: Form analyzer (hybrid) *(planned)*
-- **Rules** (explainable): each fault has a code, a tip and a priority.
-  - Squat: `SQUAT_SHALLOW` (not deep enough), `SQUAT_LEAN` (torso leaning more than 45°).
-  - Push-up: `PUSHUP_SAG` (hips dropping, body line under 160°), `PUSHUP_SHALLOW`.
-  - Curl: `CURL_SWING` (elbows moving), `CURL_PARTIAL` (not squeezing at the top).
-- **Random Forest** (200 trees): takes the summary of one rep and returns a **form score from 0 to 100**.
-- The rules say *what* to fix. The model says *how good* the rep was overall.
+### Stage 6: Form analyzer (hybrid) *(rules done, Random Forest planned)*
+- **Rules** (explainable, `coach/reasoning/form_analyzer.py`): each fault has a code, a tip and a priority (1 safety, 2 range of motion, 3 tempo or placement). A rule is a line in `configs/rules.yaml` such as `min_knee > 85`, checked on the summary of each rep: the min, max and range of every feature during the rep, and its duration.
+
+| Exercise | Fault | Check | Tip | Fires on good / bad reps |
+|---|---|---|---|---|
+| Squat | `SQUAT_LEAN` | torso lean > 55° | Chest up! | 7% / 5% |
+| | `SQUAT_SHALLOW` | lowest knee angle > 85° | Go a bit lower | 8% / 25% |
+| | `SQUAT_KNEES_FORWARD` | knee > 0.52 torso ahead of ankle | Sit back, knees behind toes | 5% / 16% |
+| | `SQUAT_FAST` | rep < 1.07 s | Slow down, control the descent | 6% / 25% |
+| Push-up | `PUSHUP_SAG` | body line < 148° | Tighten your core, hips up | 6% / 28% |
+| | `PUSHUP_SHALLOW` | lowest elbow angle > 100° | Lower your chest | 9% / 25% |
+| | `PUSHUP_HANDS_FORWARD` | wrist ahead of shoulder | Hands under your shoulders | 5% / 15% |
+| Curl | `CURL_BODY_SWING` | torso lean varies > 6.5° | Don't swing your body | 6% / 13% |
+| | `CURL_SWING` | shoulder angle varies > 19° | Keep elbows still | 5% / 18% |
+| | `CURL_PARTIAL` | lowest elbow angle > 70° | Squeeze to the top | 7% / 30% |
+| | `CURL_FAST` | rep < 1.0 s | Slow down, control the weight | 4% / 36% |
+
+- **How the thresholds were set.** `training/extract_rep_summaries.py` cuts every clip into reps (4,426 reps from 427 clips, `data/processed/reps.parquet`). Good and bad clips of the same person were compared to find what actually differs. Push-up: hips sag and hands sit further forward in about 85% of subjects. Curl: shorter range and faster reps. Squat: "bad" means different things for different people, so no single measure separates it. Each threshold was then set so the rule fires on only 5–9% of good reps. The dataset never says *which* fault a bad clip has, so this is the best check available.
+- **Result** (`scripts/eval_form_rules.py`, reliable views only). A clip is judged bad when more than 30% of its reps have a fault. **71% of 241 clips are classified correctly**: curl 77%, push-up 70%, squat 63%. The thresholds were tuned on the same clips, so these figures are a little optimistic.
+- Rules also give a temporary **score**: 100 minus 30 per safety fault, 20 per range fault and 10 per tempo fault.
+- **Random Forest** (200 trees, step 6): takes the summary of one rep and returns a **form score from 0 to 100**, replacing the temporary score. The rules say *what* to fix. The model says *how good* the rep was overall.
 
 ### Stage 7: Feedback engine *(planned)*
 Chooses **one tip at a time** so the user is not overwhelmed.
@@ -174,11 +188,11 @@ ai-workout-coach/
 ├── docker/         Dockerfile
 ├── docs/           architecture.md
 ├── models/         pose_landmarker_full.task (+ trained models later)
-├── scripts/        render_keypoints.py, eval_rep_counter.py, live_rep_counter.py (done);
+├── scripts/        render_keypoints.py, eval_rep_counter.py, eval_form_rules.py, live_rep_counter.py (done);
 │                   benchmark_fps.py, record_clip.py (stubs)
 ├── src/coach/      capture, pose, features, reasoning, feedback, db, pipeline
-├── tests/          unit tests (17 passing)
-└── training/       extract_keypoints.py (done) + training scripts (stubs)
+├── tests/          unit tests (25 passing)
+└── training/       extract_keypoints.py, extract_rep_summaries.py (done) + training scripts (stubs)
 ```
 The slide decks are kept outside this repository.
 
@@ -191,8 +205,8 @@ The slide decks are kept outside this repository.
 | 3 | Offline extraction of all videos to Parquet | ✅ Done |
 | 3b | Visual check of the detections: annotated clips, overview image, quality report for all videos | ✅ Done |
 | 4 | Rep counter: glitch filter, thresholds tuned on real curves, self-calibrating state machine, live demo script | ✅ Done |
-| 5 | **Form analyzer:** rules checked against the good/bad labels | ⏭ Next |
-| 6 | Train the LSTM classifier and Random Forest, split by subject, MLflow tracking | Planned |
+| 5 | Form analyzer: rules tuned and checked against the good/bad labels (71% of clips), tips and score in the live demo | ✅ Done |
+| 6 | **Train the LSTM classifier and Random Forest, split by subject, MLflow tracking** | ⏭ Next |
 | 7 | Runtime: feedback engine, pipeline, database access, Streamlit pages | Planned |
 | 8 | Validate on the user's own webcam clips | Planned |
 
