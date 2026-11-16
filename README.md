@@ -2,7 +2,9 @@
 
 A personal trainer that runs on a laptop with a webcam. It recognizes the exercise (squat, push-up, bicep curl), counts the repetitions, judges the posture on each rep and gives one short tip at a time. Everything runs locally and in real time: no video leaves the computer.
 
-> **Status (15 November 2026):** steps 1 to 6 of 8 are done. The webcam demo counts reps and gives a posture tip and a score after each rep. Both models are trained; wiring them into the app is next. Anything marked *planned* is designed but not yet coded.
+> **Status (17 November 2026):** steps 1 to 7 of 8 are done. The Streamlit app runs the full coach on a demo video, an uploaded video or the webcam: it recognizes the exercise, counts reps, gives one tip at a time with a form score, and saves every session. Validation on our own webcam clips (step 8) is next.
+>
+> **Run the demo:** `python -m streamlit run app/streamlit_app.py`. See [DEMO.md](DEMO.md) for the presentation guide.
 
 ## 1. What This Project Achieved
 
@@ -12,8 +14,8 @@ A personal trainer that runs on a laptop with a webcam. It recognizes the exerci
 4. Audited detection quality on every video with annotated clips and a quality report, and dropped the camera views that were unreliable.
 5. Built a rep counter (state machine, no ML) whose thresholds adapt to the user and camera view: 79% of 296 clips exact and 92% within ±1 rep of an independent count, 32 to 41 FPS live on a CPU.
 6. Built a rule-based form analyzer: 11 rules tuned on the good/bad labels, 72% of 244 clips classified correctly, with a tip and a score per rep in the live demo.
-7. Trained the LSTM exercise classifier: 96.7% of 1-second windows and 98% of clips right on 5 subjects never seen in training (3 min on the GPU), and the Random Forest form score: 74% of clips right on held-out subjects (curl 82%, squat 71%, push-up 68%).
-8. Designed the full application: hybrid form analyzer, feedback engine, SQLite history and a Streamlit interface.
+7. Trained the LSTM exercise classifier: 96.7% of 2-second windows and 98% of clips right on 5 subjects never seen in training (3 min on the GPU), and the Random Forest form score: 74% of clips right on held-out subjects (curl 82%, squat 71%, push-up 68%).
+8. Built the application: a pipeline that runs every stage on each frame (25 to 32 FPS on a CPU), a feedback engine (one tip at a time, safety first, 3-second cooldown), a SQLite session history and a three-page Streamlit interface (live coach, session report, history).
 
 ## 2. Verified Results
 
@@ -28,8 +30,9 @@ A personal trainer that runs on a laptop with a webcam. It recognizes the exerci
 | Form rules, clips classified good/bad (244) | 72%: curl 76%, push-up 71%, squat 65% |
 | Exercise classifier (LSTM), 5 unseen subjects | 96.7% of windows, 98% of clips |
 | Form score (Random Forest), held-out subjects | 74% of clips (curl 82%, squat 71%, push-up 68%) |
-| Live demo speed | 32 to 41 FPS on the CPU |
-| Unit tests | 27 passing |
+| Live speed, rep counter alone | 32 to 41 FPS on the CPU |
+| Live speed, full pipeline (pose, LSTM, counter, form) | 25 to 32 FPS on the CPU |
+| Unit tests | 34 passing |
 
 The dataset has no hand-counted reps, so the counter is compared with an independent offline peak count of each angle curve.
 
@@ -44,8 +47,8 @@ The dataset has no hand-counted reps, so the counter is compared with an indepen
 | 4 | Rep counter: glitch filter, thresholds tuned on real curves, state machine with adaptive thresholds, live demo | ✅ Done |
 | 5 | Form analyzer: 11 rules tuned and checked against the good and bad labels, tips and score in the live demo | ✅ Done |
 | 6 | Train the LSTM classifier and the Random Forest, split by subject, MLflow tracking | ✅ Done |
-| 7 | Runtime: feedback engine, pipeline, database access, Streamlit pages | ⏭ Next |
-| 8 | Validate on our own webcam clips | Planned |
+| 7 | Runtime: feedback engine, pipeline, database access, Streamlit pages, backup demo video | ✅ Done |
+| 8 | Validate on our own webcam clips | ⏭ Next |
 
 ## 4. How It Works
 
@@ -87,7 +90,7 @@ Goal: turn 33 landmarks into numbers that describe the movement.
 
 - Distances are divided by torso length, so the result does not depend on how far the user stands.
 - The better-visible side of the body is used.
-- A One Euro filter removes jitter without adding lag, and a 30-frame window (about 1 second) feeds the classifier as a `(30, 16)` array.
+- A One Euro filter removes jitter without adding lag, and a 30-frame window (2 seconds, sampled at 15 frames per second) feeds the classifier as a `(30, 16)` array.
 
 ### Phase C: Dataset extraction and quality audit (done)
 
@@ -126,11 +129,14 @@ Thresholds were set from the real angle curves and live in `configs/rules.yaml`.
 - 11 rules in `configs/rules.yaml` (`"<measure> <op> <value>"`), each firing on only 5-9% of good reps. A clip is judged bad when over 30% of its reps have a fault: 72% of 244 clips correct (curl 76%, push-up 70%, squat 63%).
 - A Random Forest (200 trees, one per exercise, `training/train_form_model.py`) scores each rep from 0 to 100. Cross-validated by subject: 74% of clips right. It replaces the temporary rule-based score. The rules say what to fix, the model says how good the rep was overall.
 
-### Phase F: Exercise classifier (done), feedback and app (planned)
+### Phase F: Exercise classifier, feedback and app (done)
 
 - PyTorch LSTM (2 layers x 64 units, `training/train_classifier.py`) on the 30-frame window: `squat`, `pushup`, `curl` or `idle` (the 4 other dataset exercises stand in for idle). The label changes only after 5 consecutive votes above 70% confidence. Exported as TorchScript. On 5 unseen subjects: 96.7% of windows (squat 93%, curl 97%, push-up 100%) and 98% of clips.
 - Feedback engine: one tip at a time, safety before depth before tempo, 3-second cooldown, encouragement after 3 clean reps.
-- Streamlit interface (live, report, history) through streamlit-webrtc, and a SQLite history (users, sessions, sets, reps, form events) with SQLAlchemy. The schema is done.
+- `coach/pipeline.py` runs every stage on each frame. In auto mode, a rep counter runs in parallel for each exercise, so the reps done while the LSTM is still deciding (about 3 s) are not lost.
+- If no rule fires but the Random Forest score is low, the coach gives a general tip ("Slow down and control the full movement") instead of praise.
+- Streamlit interface (`app/`): live coach (demo video, uploaded video or webcam), session report and history. Sessions are saved in SQLite (users, sessions, sets, reps, form events) with SQLAlchemy.
+- `scripts/make_demo_video.py` renders a backup demo video (`demo/coach_demo.mp4`, 3 min): six clips, good and bad form for each exercise, with the full overlay.
 
 ## 6. Key Design Decisions
 
@@ -151,6 +157,10 @@ Thresholds were set from the real angle curves and live in `configs/rules.yaml`.
 | `training/extract_rep_summaries.py` | Cut every clip into reps, one summary row per rep | Done |
 | `scripts/eval_form_rules.py` | Check the posture rules against the good/bad labels | Done |
 | `scripts/live_rep_counter.py` | Webcam demo: skeleton, count and state | Done |
+| `app/streamlit_app.py` | The application: live coach, session report, history | Done |
+| `scripts/make_demo_video.py` | Backup demo video with the full overlay | Done |
+| `training/train_classifier.py`, `training/train_form_model.py` | Train the LSTM and the Random Forest | Done |
+| `scripts/qevd_split_zip.py`, `training/extract_qevd.py`, `scripts/eval_qevd_squat.py` | Read, extract and test the QEVD dataset (front-view squats) | Done |
 | `scripts/benchmark_fps.py`, `scripts/record_clip.py` | Speed benchmark, record own clips | Planned |
 
 ## 8. Reproducible Run Order
@@ -164,13 +174,14 @@ make test
 
 **2. Get the pose model.** Download [pose_landmarker_full.task](https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task) into `models/` (it is not in Git).
 
-**3. Try the live rep counter.**
+**3. Run the app.**
 
 ```bash
-make live EX=squat    # squat, pushup or curl (q to quit, r to reset)
+make run              # = python -m streamlit run app/streamlit_app.py, then open http://localhost:8501
+make demo-video       # backup video: demo/coach_demo.mp4
 ```
 
-Stand side-on to the camera: detection is reliable from the side, not from the front.
+The models are not in Git: `python training/train_classifier.py` and `python training/train_form_model.py` rebuild them (about 4 minutes). Stand side-on to the camera: detection is reliable from the side, not from the front.
 
 **4. Rebuild the dataset results** (needs the videos in `data/raw/`, see below).
 
@@ -182,7 +193,7 @@ make reps             # cut clips into reps
 make eval-form        # posture rules evaluation
 ```
 
-**With Docker** (Streamlit app on port 8501, MLflow on port 5000):
+**With Docker** (Streamlit app on port 8501, MLflow on port 5000; the webcam mode needs the app to run locally, not in Docker):
 
 ```bash
 cp .env.example .env
@@ -203,9 +214,9 @@ ai-workout-coach/
 ├── docker/         Dockerfile
 ├── docs/           architecture.md
 ├── models/         pose model, trained models later
-├── scripts/        quality check, rep counter evaluation and live demo
+├── scripts/        quality checks, evaluations, demo video, QEVD tools
 ├── src/coach/      capture, pose, features, reasoning, feedback, db, pipeline
-├── tests/          unit tests (17 passing)
+├── tests/          unit tests (34 passing)
 └── training/       extraction, then training, evaluation and export
 ```
 
@@ -215,7 +226,7 @@ ai-workout-coach/
 - **Dataset vs real webcam.** The clips are controlled recordings, a home webcam has different light, framing and angle.
 - **Binary labels.** The dataset says good or bad, not what was wrong, so specific tips come from the hand-written rules.
 - **Camera view.** Angles are most reliable from the side: the median lowest squat knee angle is 59° from the side, 92° from the front and 83° from the diagonal.
-- **Real-time target.** The full pipeline target is 20+ FPS on a CPU. The rep counter demo reaches 32 to 41 FPS, the full pipeline is not measured yet.
+- **Real-time target.** The full pipeline runs at 25 to 32 FPS on a CPU with dataset videos. With the webcam, low light lowers the camera's own frame rate.
 
 ## 12. Tech Stack
 
@@ -225,7 +236,7 @@ ai-workout-coach/
 | ML | PyTorch (LSTM), scikit-learn (Random Forest) |
 | Data | pandas, Parquet (pyarrow), NumPy |
 | Storage | SQLite via SQLAlchemy |
-| Interface | Streamlit, streamlit-webrtc, Plotly |
+| Interface | Streamlit (webcam through OpenCV) |
 | Tooling | MLflow, Docker, docker-compose, Makefile, pytest |
 
 Full project description: [PROJECT_DESCRIPTION.md](PROJECT_DESCRIPTION.md).

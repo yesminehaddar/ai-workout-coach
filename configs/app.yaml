@@ -20,7 +20,7 @@ classifier:
   classes: [squat, pushup, curl, idle]
 
 form_model:
-  model_path: models/form_rf.joblib
+  model_path: models/form_model.joblib
 
 feedback:
   cooldown_s: 3

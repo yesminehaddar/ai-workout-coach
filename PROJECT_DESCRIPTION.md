@@ -1,6 +1,6 @@
 # AI Workout Coach: full project description
 
-*Status as of 2026-11-15. Steps 1 to 6 of 8 are done, plus a visual quality check of the detections (step 3b). Anything marked **planned** is designed but not yet coded.*
+*Status as of 2026-11-17. Steps 1 to 7 of 8 are done, plus a visual quality check of the detections (step 3b). Anything marked **planned** is designed but not yet coded.*
 
 ## 1. The idea
 
@@ -37,7 +37,7 @@ Webcam ─► 1 Capture ─► 2 Pose (33 points) ─► 3 Features (angles, smo
 ```
 
 ### Stage 1: Capture (OpenCV)
-Reads the webcam (1280×720, 30 fps, mirrored like a mirror). Settings are in `configs/app.yaml`. *Planned.*
+Reads the webcam (mirrored like a mirror) or a video file with OpenCV. *(done, inside the app)*
 
 ### Stage 2: Pose estimation (MediaPipe) *(done)*
 MediaPipe's `PoseLandmarker` finds **33 body landmarks** per frame (nose, shoulders, elbows, wrists, hips, knees, ankles, and so on), each with x, y, z and a visibility score.
@@ -57,10 +57,10 @@ Landmarks are turned into **16 numbers per frame** (`coach/features/angles.py`).
 | Bookkeeping | `visibility`, `side` (0 = left, 1 = right) |
 
 - **One Euro filter:** removes landmark jitter without adding lag. It smooths strongly when the body is still and lightly when it moves fast.
-- **Sliding window:** keeps the last 30 frames (about 1 second) as a `(30, 16)` array for the classifier.
+- **Sliding window:** keeps the last 30 frames (2 seconds, sampled at 15 frames per second) as a `(30, 16)` array for the classifier.
 
 ### Stage 4: Exercise classifier (LSTM) *(done)*
-**Result** (`training/train_classifier.py`, 3 minutes on the RTX 3050): tested on 5 subjects never seen in training, **96.7% of 1-second windows** are right (push-up 100%, curl 97%, squat 93%) and **98% of clips** by majority vote. The dataset has no idle footage, so its 4 other exercises (shoulder press, tricep, back row, abs) stand in for `idle`. Validation for early stopping uses 3 other subjects. Normalization is stored inside the model.
+**Result** (`training/train_classifier.py`, 3 minutes on the RTX 3050): tested on 5 subjects never seen in training, **96.7% of 2-second windows** are right (push-up 100%, curl 97%, squat 93%) and **98% of clips** by majority vote. The dataset has no idle footage, so its 4 other exercises (shoulder press, tricep, back row, abs) stand in for `idle`. Validation for early stopping uses 3 other subjects. Normalization is stored inside the model.
 A small PyTorch LSTM (2 layers × 64 units, dropout 0.3) reads the 30-frame window and outputs one of `squat | pushup | curl | idle`.
 - It runs every 10 frames, not every frame.
 - The label only changes after **5 consecutive votes above 70% confidence**, which stops it flickering between exercises.
@@ -107,19 +107,25 @@ Thresholds were set from the real angle curves (`configs/rules.yaml`):
 - Rules also give a temporary **score**: 100 minus 30 per safety fault, 20 per range fault and 10 per tempo fault.
 - **Random Forest** (200 trees, one per exercise, `training/train_form_model.py`): takes the summary of one rep and returns a **form score from 0 to 100** (probability of "good"), replacing the temporary score. Cross-validated by subject (5 folds): **74% of clips right** (curl 82%, squat 71%, push-up 68%), slightly above the rules, and this time on people the model never saw. The rules say *what* to fix. The model says *how good* the rep was overall.
 
-### Stage 7: Feedback engine *(planned)*
-Chooses **one tip at a time** so the user is not overwhelmed.
+### Stage 7: Feedback engine *(done)*
+Chooses **one tip at a time** so the user is not overwhelmed (`coach/feedback/engine.py`).
 - Priority: safety (back, knees) before depth before tempo.
 - Each tip has a 3-second cooldown.
 - After 3 clean reps in a row, it encourages the user.
+- If no rule fires but the Random Forest score is below 50, it gives a general tip ("Slow down and control the full movement") instead of praise: the rules do not see every mistake.
 - Every tip shown is stored for the report.
 
-## 3. The interface (Streamlit) *(planned; pages exist as stubs)*
-- **Live page:** webcam view with the skeleton drawn on it, the rep counter, the current tip and the form score. The camera goes through the browser (`streamlit-webrtc`), so it also works inside Docker.
-- **Report page:** summary of the finished session (reps, partial reps, average score, most common faults).
-- **History page:** progress over time.
+### The pipeline *(done)*
+`coach/pipeline.py` runs all the stages on each frame at **25–32 FPS on a CPU**. In auto mode, the LSTM needs about 3 seconds to recognize the exercise; a rep counter runs in parallel for each exercise meanwhile, so those first reps are kept once the exercise is known. On the six demo clips it recognizes every exercise, counts every rep exactly, and scores good form 90–96 and bad form 2–5.
 
-## 4. Data storage (SQLite) *(schema done, access code planned)*
+## 3. The interface (Streamlit) *(done)*
+Run with `python -m streamlit run app/streamlit_app.py`. Presentation guide: [DEMO.md](DEMO.md).
+- **Live coach:** a demo video, an uploaded video or the webcam, with the skeleton drawn on it, the detected exercise, the rep counter, the last rep's form score and the current tip. The webcam is read with OpenCV, so this mode needs the app to run locally (not in Docker).
+- **Session report:** totals, form score per rep and the most frequent mistakes, read back from the database.
+- **History:** every session, with the average score over time.
+- **Backup demo video:** `scripts/make_demo_video.py` writes `demo/coach_demo.mp4` (3 min, H.264): six clips, good and bad form for each exercise, with the full overlay and a summary.
+
+## 4. Data storage (SQLite) *(done)*
 Five linked tables, defined with SQLAlchemy in `coach/db/models.py`:
 
 ```
@@ -175,7 +181,7 @@ Decision: front-view push-up and curl clips are dropped from rep counting and tr
 | ML | PyTorch (LSTM), scikit-learn (Random Forest), joblib |
 | Data | pandas, Parquet (pyarrow), NumPy |
 | Storage | SQLite via SQLAlchemy |
-| Interface | Streamlit, streamlit-webrtc, Plotly |
+| Interface | Streamlit (webcam through OpenCV) |
 | Experiment tracking | MLflow (port 5000) |
 | Packaging | Docker and docker-compose (app on port 8501), Makefile, Git LFS for model files |
 
@@ -192,7 +198,7 @@ ai-workout-coach/
 ├── scripts/        render_keypoints.py, eval_rep_counter.py, eval_form_rules.py, live_rep_counter.py (done);
 │                   benchmark_fps.py, record_clip.py (stubs)
 ├── src/coach/      capture, pose, features, reasoning, feedback, db, pipeline
-├── tests/          unit tests (27 passing)
+├── tests/          unit tests (34 passing)
 └── training/       extract_keypoints.py, extract_rep_summaries.py, train_form_model.py, train_classifier.py (done)
 ```
 The slide decks are kept outside this repository.
@@ -208,8 +214,8 @@ The slide decks are kept outside this repository.
 | 4 | Rep counter: glitch filter, thresholds tuned on real curves, state machine with thresholds that adapt to the user and the camera view (79% exact, 92% within ±1), live demo script | ✅ Done |
 | 5 | Form analyzer: rules tuned and checked against the good/bad labels (72% of clips), tips and score in the live demo | ✅ Done |
 | 6 | Train the LSTM classifier (96.7% of windows, 98% of clips) and Random Forest (74% of clips), split by subject, MLflow tracking | ✅ Done |
-| 7 | **Runtime: feedback engine, pipeline, database access, Streamlit pages** | ⏭ Next |
-| 8 | Validate on the user's own webcam clips | Planned |
+| 7 | Runtime: feedback engine, pipeline, database access, Streamlit pages, backup demo video | ✅ Done |
+| 8 | **Validate on the user's own webcam clips** | ⏭ Next |
 
 **First usable milestone:** the end of step 4, a webcam rep counter with no ML.
 

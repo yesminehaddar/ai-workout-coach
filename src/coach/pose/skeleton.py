@@ -39,6 +39,12 @@ def draw_skeleton(img: np.ndarray, points: dict[int, tuple[float, float]] | list
 
 def put_text(img: np.ndarray, text: str, pos: tuple[int, int], scale: float = 1.0,
              color: tuple[int, int, int] = WHITE) -> None:
-    """Texte lisible sur n'importe quel fond (contour noir)."""
-    cv2.putText(img, text, pos, cv2.FONT_HERSHEY_SIMPLEX, scale, (0, 0, 0), max(2, int(5 * scale)))
-    cv2.putText(img, text, pos, cv2.FONT_HERSHEY_SIMPLEX, scale, color, max(1, int(2 * scale)))
+    """Texte lisible sur n'importe quel fond (ombre portée noire).
+
+    L'ombre a la même épaisseur que le texte : avec un contour plus épais, OpenCV espace les
+    lettres différemment et la fin du contour dépasse du texte."""
+    th = max(1, round(2 * scale))
+    off = max(1, round(2 * scale))
+    x, y = pos
+    cv2.putText(img, text, (x + off, y + off), cv2.FONT_HERSHEY_SIMPLEX, scale, (0, 0, 0), th + 1, cv2.LINE_AA)
+    cv2.putText(img, text, (x, y), cv2.FONT_HERSHEY_SIMPLEX, scale, color, th, cv2.LINE_AA)
