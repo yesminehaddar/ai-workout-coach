@@ -12,9 +12,8 @@ pyarrow>=15.0
 SQLAlchemy>=2.0
 PyYAML>=6.0
 # --- Interface ---
-streamlit>=1.33
-streamlit-webrtc>=0.47
-plotly>=5.20
+streamlit>=1.46            # st.navigation, width="stretch"
+imageio-ffmpeg>=0.5        # vidéo de démo en H.264 (scripts/make_demo_video.py)
 # --- Suivi des expériences ---
 mlflow>=2.12
 python-dotenv>=1.0

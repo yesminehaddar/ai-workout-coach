@@ -1,10 +1,16 @@
-"""Page principale : vue webcam en direct (streamlit-webrtc), squelette, compteur, conseil.
+"""Point d'entrée de l'application : navigation entre les trois pages.
 
-Lancer : streamlit run app/streamlit_app.py
+Lancer : python -m streamlit run app/streamlit_app.py
 """
+from pathlib import Path
+
 import streamlit as st
 
-st.set_page_config(page_title="AI Workout Coach", layout="wide")
-st.title("AI Workout Coach")
-st.info("Architecture en place : la vue live sera branchée sur coach.pipeline.CoachPipeline.")
-# TODO: webrtc_streamer(...) + CoachPipeline.process(frame)
+HERE = Path(__file__).parent
+st.set_page_config(page_title="AI Workout Coach", page_icon="🏋️", layout="wide")
+nav = st.navigation([
+    st.Page(HERE / "live.py", title="Live coach", icon="🏋️", default=True),
+    st.Page(HERE / "report.py", title="Session report", icon="📋"),
+    st.Page(HERE / "history.py", title="History", icon="📈"),
+])
+nav.run()

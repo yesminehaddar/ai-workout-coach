@@ -1,11 +1,14 @@
-.PHONY: install run up down test lint extract previews eval-reps reps eval-form live train benchmark
+.PHONY: install run demo-video up down test lint extract previews eval-reps reps eval-form live train benchmark
 
 install:      ## Installer les dépendances + le package coach (mode éditable)
 	pip install -r requirements-dev.txt
 	pip install -e .
 
 run:          ## Lancer l'application en local
-	streamlit run app/streamlit_app.py
+	python -m streamlit run app/streamlit_app.py
+
+demo-video:   ## Vidéo de démo de secours -> demo/coach_demo.mp4
+	python scripts/make_demo_video.py
 
 up:           ## Lancer l'app + MLflow avec Docker
 	docker compose up --build

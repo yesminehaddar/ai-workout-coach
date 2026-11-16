@@ -20,3 +20,4 @@ models/*.task
 .ruff_cache/
 models/*.joblib
 models/*.pt
+demo/
