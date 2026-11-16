@@ -48,9 +48,13 @@ def parse_name(path: Path) -> dict | None:
 
 
 def extract_one(video_path: str) -> tuple[str, int, int]:
-    """Traite une vidéo. Renvoie (nom, frames lues, frames avec pose détectée)."""
+    """Traite une vidéo du dataset Mendeley. Renvoie (nom, frames lues, frames avec pose détectée)."""
     path = Path(video_path)
-    meta = parse_name(path)
+    return extract_video(path, parse_name(path), OUT)
+
+
+def extract_video(path: Path, meta: dict, out_dir: Path) -> tuple[str, int, int]:
+    """MediaPipe + features sur une vidéo -> out_dir/<nom>.parquet (meta copiée sur chaque ligne)."""
     cap = cv2.VideoCapture(str(path))
     fps = cap.get(cv2.CAP_PROP_FPS) or 15.0
     est = PoseEstimator()
@@ -79,10 +83,10 @@ def extract_one(video_path: str) -> tuple[str, int, int]:
     df = pd.DataFrame(rows)
     float_cols = df.select_dtypes("float64").columns
     df[float_cols] = df[float_cols].astype("float32")
-    OUT.mkdir(parents=True, exist_ok=True)
-    tmp = OUT / (path.stem + ".parquet.tmp")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    tmp = out_dir / (path.stem + ".parquet.tmp")
     df.to_parquet(tmp, index=False)
-    tmp.replace(OUT / (path.stem + ".parquet"))  # écriture atomique : pas de fichier à moitié écrit
+    tmp.replace(out_dir / (path.stem + ".parquet"))  # écriture atomique : pas de fichier à moitié écrit
     return path.name, n, found
 
 
