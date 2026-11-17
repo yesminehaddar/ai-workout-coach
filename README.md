@@ -240,3 +240,11 @@ ai-workout-coach/
 | Tooling | MLflow, Docker, docker-compose, Makefile, pytest |
 
 Full project description: [PROJECT_DESCRIPTION.md](PROJECT_DESCRIPTION.md).
+
+## License
+
+The code is released under the [MIT License](LICENSE).
+
+The datasets and the pose model are not part of this repository and keep their own licenses: the Mendeley
+"fitness exercises, good and bad form" dataset is CC BY 4.0 (cite the authors), QEVD-FIT-300k is under
+Qualcomm's research-use data license, and the MediaPipe Pose Landmarker model is under Apache 2.0.
