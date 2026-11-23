@@ -12,9 +12,9 @@ Sorties dans data/keypoint_previews/ :
   clips/*.mp4          vidéos annotées de l'échantillon
 
 Usage :
-    python scripts/render_keypoints.py                      # échantillon par défaut
-    python scripts/render_keypoints.py --video subject_003_squat_good_diagonal.mp4
-    python scripts/render_keypoints.py --report-only
+    python ml/data/render_keypoints.py                      # échantillon par défaut
+    python ml/data/render_keypoints.py --video subject_003_squat_good_diagonal.mp4
+    python ml/data/render_keypoints.py --report-only
 """
 import argparse
 import sys
@@ -26,7 +26,7 @@ import pandas as pd
 
 from coach.pose.skeleton import draw_skeleton, put_text
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 RAW = ROOT / "data" / "raw" / "fitness_form"
 KP = ROOT / "data" / "processed" / "keypoints"
 OUT = ROOT / "data" / "keypoint_previews"

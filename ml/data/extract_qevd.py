@@ -1,10 +1,10 @@
 """Extraction des points et features pour les clips QEVD-FIT-300k (squats, pompes).
 
 Entrée : data/raw/qevd_fit300k/clips/*.mp4 et clips_index.csv (écrits à partir des archives par
-scripts/qevd_split_zip.py). QEVD n'a pas d'identifiant de personne : on garde sa séparation
+ml/data/qevd_split_zip.py). QEVD n'a pas d'identifiant de personne : on garde sa séparation
 train/test. Vue : toujours de face (webcam à la maison).
 
-Usage : python training/extract_qevd.py [--workers 6]  -> data/processed/qevd.parquet
+Usage : python ml/data/extract_qevd.py [--workers 6]  -> data/processed/qevd.parquet
 """
 import argparse
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -13,7 +13,7 @@ from pathlib import Path
 import pandas as pd
 from extract_keypoints import extract_video
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 RAW = ROOT / "data" / "raw" / "qevd_fit300k"
 OUT = ROOT / "data" / "processed" / "qevd_keypoints"
 EXERCISE = {"squats": "squat", "pushups": "push_up"}  # mêmes noms que le dataset Mendeley

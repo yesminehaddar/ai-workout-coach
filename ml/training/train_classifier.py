@@ -1,13 +1,20 @@
 """Étape 6b : entraîne le LSTM qui reconnaît l'exercice (GPU si disponible).
 
-Données : data/processed/all.parquet. Les features passent par JumpFilter + One Euro, comme
-dans l'appli, puis sont découpées en fenêtres de 30 frames (pas de 5 en train, 15 en test).
-Classes : squat, pushup, curl ; les 4 autres exercices du dataset -> idle.
-Séparation par sujet : test = 5 sujets, validation (early stopping) = 3 sujets, train = le reste.
-Adam, cross-entropy pondérée, early stopping. Suivi MLflow (mlruns/mlflow.db).
+Données : data/processed/all.parquet (Mendeley) et qevd.parquet (QEVD-FIT-300k, squats et pompes
+de face), voir coach.datasets. Les features passent par JumpFilter + One Euro, comme dans l'appli,
+puis sont découpées en fenêtres de 30 frames (pas de 5 en train, 15 en test).
+Classes : squat, pushup, curl ; les 4 autres exercices Mendeley -> idle.
+Séparation : Mendeley par sujet (test = 5 sujets, validation = 3), QEVD selon sa séparation
+train / test (10 % du train en validation). Résultats test par source et par vue.
+Adam, cross-entropy pondérée, early stopping. Suivi MLflow (data/mlruns/mlflow.db).
 
-Usage : python training/train_classifier.py  -> models/exercise_lstm.pt (TorchScript)
+Usage :
+    python ml/training/train_classifier.py                       # toutes les sources présentes
+    python ml/training/train_classifier.py --sources mendeley    # refait le modèle d'origine
+    python ml/training/train_classifier.py --out data/models/candidates/exercise_lstm.pt
+Sortie par défaut : data/models/exercise_lstm.pt (TorchScript), le modèle utilisé par l'appli.
 """
+import argparse
 import time
 from pathlib import Path
 
@@ -16,21 +23,21 @@ import numpy as np
 import pandas as pd
 import torch
 from torch import nn
+from tracking import start_experiment  # ml/training/tracking.py
 
 from coach.config import load_config
+from coach.datasets import load_frames, parse_sources
 from coach.features.angles import FEATURE_NAMES
 from coach.features.smoothing import FeatureSmoother, JumpFilter
 from coach.reasoning.classifier import CLASSES, ExerciseLSTM
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 LABELS = {"squat": 0, "push_up": 1, "bicep_curl": 2}  # autre -> 3 (idle)
 WIN = 30
 
 
-def clip_arrays() -> list[tuple[np.ndarray, int, int, str, str]]:
-    """Une entrée par clip : (features lissées (T, 16), label, sujet, vue, vidéo)."""
-    df = pd.read_parquet(ROOT / "data" / "processed" / "all.parquet",
-                         columns=["video", "subject", "exercise", "view", "frame", "t", *FEATURE_NAMES])
+def clip_arrays(df: pd.DataFrame) -> list[tuple[np.ndarray, int, str, str, str, str]]:
+    """Une entrée par clip : (features lissées (T, 16), label, split, vue, vidéo, source)."""
     out = []
     for video, g in df.groupby("video"):
         g = g.sort_values("frame")
@@ -40,19 +47,19 @@ def clip_arrays() -> list[tuple[np.ndarray, int, int, str, str]]:
             rows.append([np.nan] * len(FEATURE_NAMES) if np.isnan(f["knee"])
                         else [sm(jf(f), t)[k] for k in FEATURE_NAMES])
         x = pd.DataFrame(rows).ffill().to_numpy(np.float32)
-        out.append((x, LABELS.get(g["exercise"].iloc[0], 3), int(g["subject"].iloc[0]),
-                    g["view"].iloc[0], video))
+        out.append((x, LABELS.get(g["exercise"].iloc[0], 3), g["split"].iloc[0],
+                    g["view"].iloc[0], video, g["source"].iloc[0]))
     return out
 
 
 def windows(clips, stride: int):
     X, y, meta = [], [], []
-    for x, label, subject, view, video in clips:
+    for x, label, _split, view, video, source in clips:
         for s in range(0, len(x) - WIN + 1, stride):
             X.append(x[s:s + WIN])
             y.append(label)
-            meta.append((video, view))
-    return np.stack(X), np.array(y), pd.DataFrame(meta, columns=["video", "view"])
+            meta.append((video, view, source))
+    return np.stack(X), np.array(y), pd.DataFrame(meta, columns=["video", "view", "source"])
 
 
 @torch.no_grad()
@@ -63,25 +70,30 @@ def predict(model, X, device, bs=1024) -> np.ndarray:
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--sources", help="mendeley,qevd (défaut : toutes celles présentes)")
+    ap.add_argument("--processed", type=Path, default=ROOT / "data" / "processed")
+    ap.add_argument("--out", type=Path, default=ROOT / "data" / "models" / "exercise_lstm.pt")
+    args = ap.parse_args()
+    sources = parse_sources(args.sources, args.processed)
     cfg = load_config("model")
     lc, tc = cfg["lstm"], cfg["training"]
     torch.manual_seed(0)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     t0 = time.time()
-    clips = clip_arrays()
-    subjects = sorted({c[2] for c in clips})
-    rng = np.random.default_rng(0)
-    perm = rng.permutation(subjects)
-    test_s, val_s = set(perm[:5]), set(perm[5:8])
-    split = {k: [c for c in clips if f(c[2])] for k, f in
-             [("train", lambda s: s not in test_s | val_s), ("val", lambda s: s in val_s),
-              ("test", lambda s: s in test_s)]}
+    frames = load_frames(args.processed, sources,
+                         ["video", "subject", "exercise", "view", "frame", "t", *FEATURE_NAMES])
+    test_groups = sorted(frames.loc[(frames.split == "test") & (frames.source == "mendeley"),
+                                    "group"].unique())
+    clips = clip_arrays(frames)
+    del frames
+    split = {k: [c for c in clips if c[2] == k] for k in ("train", "val", "test")}
     Xtr, ytr, _ = windows(split["train"], 5)
     Xva, yva, _ = windows(split["val"], 15)
     Xte, yte, mte = windows(split["test"], 15)
-    print(f"Préparation {time.time() - t0:.0f} s : train {len(Xtr)}, val {len(Xva)}, test {len(Xte)} "
-          f"fenêtres ; sujets test {sorted(int(s) for s in test_s)}")
+    print(f"Sources {sources}. Préparation {time.time() - t0:.0f} s : train {len(Xtr)}, val {len(Xva)}, "
+          f"test {len(Xte)} fenêtres ; sujets Mendeley test {test_groups}")
 
     model = ExerciseLSTM(lc["input_features"], lc["hidden_size"], lc["num_layers"],
                          len(CLASSES), lc["dropout"])
@@ -95,12 +107,11 @@ def main():
     opt = torch.optim.Adam(model.parameters(), lr=tc["lr"])
     Xtr_t, ytr_t = torch.from_numpy(Xtr).to(device), torch.from_numpy(ytr).to(device)
 
-    (ROOT / "mlruns").mkdir(exist_ok=True)
-    mlflow.set_tracking_uri(f"sqlite:///{(ROOT / 'mlruns' / 'mlflow.db').as_posix()}")
-    mlflow.set_experiment("exercise_classifier")
+    start_experiment("exercise_classifier")
     best, best_state, patience = -1.0, None, 0
     with mlflow.start_run():
-        mlflow.log_params({**lc, **tc, "window": WIN, "test_subjects": sorted(int(s) for s in test_s)})
+        mlflow.log_params({**lc, **tc, "window": WIN, "sources": ",".join(sources),
+                           "test_subjects": ",".join(test_groups)})
         for epoch in range(tc["max_epochs"]):
             model.train()
             order = torch.randperm(len(Xtr_t), device=device)
@@ -129,11 +140,16 @@ def main():
         clip_vote = mte.groupby("video").agg(t=("true", "first"), p=("pred", lambda s: s.mode()[0]))
         clip_acc = float((clip_vote.t == clip_vote.p).mean())
         mlflow.log_metrics({"val_acc_best": best, "test_window_acc": acc, "test_clip_acc": clip_acc})
-        print(f"\nTest (5 sujets jamais vus) : {acc:.1%} des fenêtres, {clip_acc:.1%} des clips (vote)")
+        print(f"\nTest (personnes / clips jamais vus) : {acc:.1%} des fenêtres, "
+              f"{clip_acc:.1%} des clips (vote)")
         print(pd.crosstab(mte.true, mte.pred, normalize="index").round(2).to_string())
-        print(mte.groupby("view").ok.mean().round(3).to_string())
+        print("\nPar source et par vue (part des fenêtres correctes, nombre) :")
+        print(mte.groupby(["source", "view"]).ok.agg(["mean", "size"]).round(3).to_string())
+        for (src, view), g in mte.groupby(["source", "view"]):
+            mlflow.log_metric(f"test_window_acc_{src}_{view}", float(g.ok.mean()))
 
-        out = ROOT / "models" / "exercise_lstm.pt"
+        out = args.out
+        out.parent.mkdir(parents=True, exist_ok=True)
         torch.jit.script(model.cpu().eval()).save(str(out))
         mlflow.log_artifact(str(out))
     print(f"-> {out}  ({time.time() - t0:.0f} s)")

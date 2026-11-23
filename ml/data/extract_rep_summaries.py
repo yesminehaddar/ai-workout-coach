@@ -5,24 +5,32 @@ Chaque rep (comptée ou partielle) donne une ligne : métadonnées du clip, min/
 feature, amplitude (max - min), tempo. C'est l'entrée du FormAnalyzer (règles) et du
 Random Forest (étape 6).
 
-Usage : python training/extract_rep_summaries.py  -> data/processed/reps.parquet
+Sources : Mendeley (all.parquet, bonne / mauvaise forme par clip) et QEVD-FIT-300k (qevd.parquet,
+défauts nommés -> quality + colonne faults, voir coach.datasets). Colonne source sur chaque ligne.
+
+Usage :
+    python ml/data/extract_rep_summaries.py                    # toutes les sources présentes
+    python ml/data/extract_rep_summaries.py --sources mendeley
+-> data/processed/reps.parquet
 """
+import argparse
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import yaml
 
-from coach.features.angles import FEATURE_NAMES
+from coach.config import load_config
+from coach.datasets import load_frames, parse_sources
+from coach.features.angles import EXTRA_FEATURES, FEATURE_NAMES
 from coach.features.smoothing import FeatureSmoother, JumpFilter
 from coach.reasoning.rep_counter import RepCounter
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 # Nom dans le dataset -> nom dans rules.yaml
 EXERCISES = {"squat": "squat", "push_up": "pushup", "bicep_curl": "curl"}
-SUMMARY_FEATURES = [f for f in FEATURE_NAMES if f != "side"]
-META = ["video", "subject", "exercise", "quality", "view"]
+SUMMARY_FEATURES = [f for f in FEATURE_NAMES if f != "side"] + list(EXTRA_FEATURES)
+META = ["video", "subject", "exercise", "quality", "view", "source", "group", "split", "faults"]
 
 
 def rep_rows(g: pd.DataFrame, exercise: str, th: dict) -> list[dict]:
@@ -44,22 +52,26 @@ def rep_rows(g: pd.DataFrame, exercise: str, th: dict) -> list[dict]:
 
 
 def main():
-    rules = yaml.safe_load((ROOT / "configs" / "rules.yaml").read_text(encoding="utf-8"))
-    df = pd.read_parquet(ROOT / "data" / "processed" / "all.parquet",
-                         columns=[*META, "frame", "t", *SUMMARY_FEATURES])
-    df = df[df["exercise"].isin(EXERCISES)]
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--sources", help="mendeley,qevd (défaut : toutes celles présentes)")
+    ap.add_argument("--processed", type=Path, default=ROOT / "data" / "processed")
+    args = ap.parse_args()
+    sources = parse_sources(args.sources, args.processed)
+    rules = load_config("rules")
+    df = load_frames(args.processed, sources, ["video", "exercise", "view", "frame", "t", *SUMMARY_FEATURES])
+    df = df[df["exercise"].isin(EXERCISES) & df["quality"].notna()]  # QEVD inexploitable : écarté
     out_rows = []
     for video, g in df.groupby("video"):
         g = g.sort_values("frame")
         ex = EXERCISES[g["exercise"].iloc[0]]
-        meta = {k: g[k].iloc[0] for k in META}
+        meta = {k: g[k].iloc[0] for k in META if k in g}
         meta["exercise"] = ex
         for i, r in enumerate(rep_rows(g, ex, rules["rep_counter"][ex])):
             out_rows.append({**meta, "rep": i, **r})
     res = pd.DataFrame(out_rows)
-    out = ROOT / "data" / "processed" / "reps.parquet"
+    out = args.processed / "reps.parquet"
     res.to_parquet(out, index=False)
-    print(res.groupby(["exercise", "view", "quality"])["counted"].agg(["size", "mean"])
+    print(res.groupby(["source", "exercise", "view", "quality"])["counted"].agg(["size", "mean"])
           .rename(columns={"size": "reps", "mean": "counted_share"}).round(2).to_string())
     print(f"\n{len(res)} reps from {res['video'].nunique()} clips -> {out}")
 

@@ -1,4 +1,4 @@
-"""Vérifie les règles de posture (configs/rules.yaml) contre les étiquettes good/bad du dataset.
+"""Vérifie les règles de posture (backend/coach/configs/rules.yaml) contre les étiquettes good/bad du dataset.
 
 Le dataset dit seulement si un clip est « good » ou « bad », pas quel défaut. On mesure donc :
   - par règle : % de reps où elle se déclenche, sur les clips good (fausses alertes) et bad ;
@@ -6,8 +6,8 @@ Le dataset dit seulement si un clip est « good » ou « bad », pas quel défau
     CLIP_THRESHOLD. Comparaison aussi par sujet : le clip bad a-t-il plus de défauts que le good
     du même sujet ? (élimine les différences entre personnes).
 
-Entrée : data/processed/reps.parquet (python training/extract_rep_summaries.py).
-Usage : python scripts/eval_form_rules.py  -> data/keypoint_previews/form_rules_eval.csv
+Entrée : data/processed/reps.parquet (python ml/data/extract_rep_summaries.py).
+Usage : python ml/evaluation/eval_form_rules.py  -> data/keypoint_previews/form_rules_eval.csv
 """
 from pathlib import Path
 
@@ -16,7 +16,7 @@ import pandas as pd
 from coach.config import load_config
 from coach.reasoning.form_analyzer import FormAnalyzer
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 VIEWS = {"squat": ["side"], "pushup": ["side", "diagonal"], "curl": ["side", "diagonal"]}
 CLIP_THRESHOLD = 0.3
 

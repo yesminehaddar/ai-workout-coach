@@ -2,23 +2,23 @@
 
 Le dataset n'a pas de comptage manuel. On compare donc à une référence indépendante :
 les creux de la courbe d'angle détectés hors-ligne (scipy find_peaks, qui voit toute la vidéo
-d'un coup). Un grand écart = clip à regarder (vidéos annotées : scripts/render_keypoints.py).
+d'un coup). Un grand écart = clip à regarder (vidéos annotées : ml/data/render_keypoints.py).
 
 Le compteur reçoit les features comme dans l'appli : JumpFilter -> One Euro -> RepCounter.
 
-Usage : python scripts/eval_rep_counter.py   -> data/keypoint_previews/rep_count_eval.csv
+Usage : python ml/evaluation/eval_rep_counter.py   -> data/keypoint_previews/rep_count_eval.csv
 """
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import yaml
 from scipy.signal import find_peaks
 
+from coach.config import load_config
 from coach.features.smoothing import ANGLE_FEATURES, FeatureSmoother, JumpFilter
 from coach.reasoning.rep_counter import RepCounter
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 # Nom dans le dataset -> nom dans rules.yaml, et vues fiables (cf. quality_report.csv)
 EXERCISES = {"squat": ("squat", ["side", "diagonal"]),
@@ -47,7 +47,7 @@ def run_clip(g: pd.DataFrame, exercise: str, th: dict) -> dict:
 
 
 def main():
-    rules = yaml.safe_load((ROOT / "configs" / "rules.yaml").read_text(encoding="utf-8"))
+    rules = load_config("rules")
     cols = ["video", "subject", "exercise", "quality", "view", "frame", "t", "detected",
             *ANGLE_FEATURES]
     df = pd.read_parquet(ROOT / "data" / "processed" / "all.parquet", columns=cols)

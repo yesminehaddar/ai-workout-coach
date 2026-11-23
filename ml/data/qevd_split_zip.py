@@ -5,13 +5,22 @@ dans quel morceau il commence (disk) et à quel octet. On peut donc lister l'arc
 .zip, et extraire n'importe quel fichier dont le morceau est présent sur le disque.
 
 Usage :
-    python scripts/qevd_split_zip.py list  <dossier des zips>            # résumé par morceau
-    python scripts/qevd_split_zip.py get   <dossier des zips> <nom> <sortie>
+    python ml/data/qevd_split_zip.py list  <dossier des zips>            # résumé par morceau
+    python ml/data/qevd_split_zip.py get   <dossier des zips> <nom> <sortie>
+    python ml/data/qevd_split_zip.py build <dossier des zips> <dossier de sortie>
+        # squats et pompes lisibles -> <sortie>/clips/*.mp4 + <sortie>/clips_index.csv
+        # (les étiquettes viennent de fine_grained_labels.json, dans l'archive)
+
+Un morceau absent (.z01, .z02) rend les clips qui y commencent illisibles : build les ignore.
 """
+import csv
+import json
 import struct
 import sys
 import zlib
 from pathlib import Path
+
+EXERCISES = ("squats", "pushups")
 
 
 def _segment_paths(last_zip: Path, n_disks: int) -> list[Path]:
@@ -86,8 +95,50 @@ def extract(entry: dict, segments: list[Path]) -> bytes:
     return out
 
 
+def build(folder: Path, out: Path) -> None:
+    """Écrit les clips squat / pompe lisibles et clips_index.csv (colonnes : clip, exercise,
+    labels, split), au format lu par ml/data/extract_qevd.py."""
+    zips = sorted(folder.glob("QEVD-FIT-300k-Part-*.zip"))
+    index: dict[str, dict] = {}
+    entries_by_name: dict[str, tuple[dict, list[Path]]] = {}
+    for z in zips:
+        entries, segs = read_index(z)
+        for e in entries:
+            entries_by_name[Path(e["name"]).name] = (e, segs)
+    label_entry = "fine_grained_labels.json"
+    for row in json.loads(extract(*entries_by_name[label_entry])):
+        labels = [x for x in row["labels"] if x.startswith(tuple(f"{ex} - " for ex in EXERCISES))]
+        if labels:
+            clip = Path(row["video_path"]).name
+            index[clip] = {"clip": clip, "exercise": labels[0].split(" - ")[0],
+                           "labels": " | ".join(row["labels"]), "split": row["split"]}
+    clips_dir = out / "clips"
+    clips_dir.mkdir(parents=True, exist_ok=True)
+    kept, skipped = [], 0
+    for name, meta in sorted(index.items()):
+        if name not in entries_by_name:
+            skipped += 1
+            continue
+        entry, segs = entries_by_name[name]
+        try:
+            data = extract(entry, segs)
+        except (OSError, IndexError, ValueError, zlib.error):  # morceau manquant, abîmé ou CRC incorrect
+            skipped += 1
+            continue
+        (clips_dir / name).write_bytes(data)
+        kept.append(meta)
+    with (out / "clips_index.csv").open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=["clip", "exercise", "labels", "split"])
+        w.writeheader()
+        w.writerows(kept)
+    print(f"{len(kept)} clips écrits dans {clips_dir} ({skipped} illisibles, ignorés)")
+
+
 def main():
     cmd, folder = sys.argv[1], Path(sys.argv[2])
+    if cmd == "build":
+        build(folder, Path(sys.argv[3]))
+        return
     zips = sorted(folder.glob("QEVD-FIT-300k-Part-*.zip"))
     if cmd == "list":
         for z in zips:

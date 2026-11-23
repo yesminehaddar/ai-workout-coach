@@ -7,7 +7,7 @@ personne peut être dans plusieurs plis, le score est donc un peu optimiste).
 Courbe d'apprentissage : AUC avec 25 / 50 / 75 / 100 % des clips d'entraînement. Si elle monte
 encore, plus de données aideraient.
 
-Usage : python scripts/eval_qevd_squat.py   (après training/extract_qevd.py)
+Usage : python ml/evaluation/eval_qevd_squat.py   (après ml/data/extract_qevd.py)
 """
 from pathlib import Path
 
@@ -19,7 +19,7 @@ from sklearn.model_selection import StratifiedKFold
 
 from coach.features.angles import FEATURE_NAMES
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 FEATS = [f for f in FEATURE_NAMES if f not in ("side", "visibility")]
 FAULTS = {  # défaut -> étiquettes QEVD qui le signalent
     "shallow": {"shallow", "insufficient"},

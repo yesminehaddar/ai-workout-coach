@@ -8,10 +8,10 @@ recalculer d'autres features plus tard sans refaire la passe MediaPipe (lente).
 Reprise : une vidéo déjà extraite est sautée. Relancer le script après une coupure suffit.
 
 Usage :
-    python training/extract_keypoints.py                  # tout, 4 processus
-    python training/extract_keypoints.py --limit 3        # test sur 3 vidéos
-    python training/extract_keypoints.py --workers 6 --exercise squat
-    python training/extract_keypoints.py --merge-only     # recolle les fichiers -> all.parquet
+    python ml/data/extract_keypoints.py                  # tout, 4 processus
+    python ml/data/extract_keypoints.py --limit 3        # test sur 3 vidéos
+    python ml/data/extract_keypoints.py --workers 6 --exercise squat
+    python ml/data/extract_keypoints.py --merge-only     # recolle les fichiers -> all.parquet
 """
 import argparse
 import re
@@ -26,7 +26,7 @@ import pandas as pd
 from coach.features.angles import FEATURE_NAMES, compute_features
 from coach.pose.estimator import PoseEstimator
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 RAW = ROOT / "data" / "raw" / "fitness_form"
 OUT = ROOT / "data" / "processed" / "keypoints"
 NAME_RE = re.compile(r"^subject_(\d+)_(.+)_(good|bad)_(front|side|diagonal)\.mp4$")
