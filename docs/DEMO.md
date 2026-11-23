@@ -7,12 +7,12 @@ How to present the AI Workout Coach in about 10 minutes, with or without the web
 1. Open a terminal in `ai-workout-coach/` and start the app:
 
    ```bash
-   python -m streamlit run app/streamlit_app.py
+   python -m streamlit run frontend/streamlit_app.py
    ```
 
    The browser opens on http://localhost:8501. If it does not, open that address yourself.
 2. Run one demo clip once (any of them): the first run loads the models and takes a few extra seconds.
-3. Keep `demo/coach_demo.mp4` ready in a video player as plan B.
+3. Keep `data/demo/coach_demo.mp4` ready in a video player as plan B.
 4. For the webcam: good light (a dark room makes the camera slow), the whole body in view, standing **side-on**.
 
 ## The demo, step by step
@@ -73,7 +73,7 @@ Other:
 
 ## Plan B
 
-- **The app does not start:** play `demo/coach_demo.mp4` (3 min: all six clips with the overlay, then a summary).
+- **The app does not start:** play `data/demo/coach_demo.mp4` (3 min: all six clips with the overlay, then a summary).
 - **The webcam is not detected:** use the demo videos; they show exactly the same pipeline.
 - **"Could not open the video source":** close other apps using the camera (Teams, Zoom), then press Start again.
 - **Start over cleanly:** stop the terminal (Ctrl+C) and run the start command again. To empty the history, delete `data/db/coach.db`.

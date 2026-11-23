@@ -4,7 +4,7 @@ A personal trainer that runs on a laptop with a webcam. It recognizes the exerci
 
 > **Status (17 November 2026):** steps 1 to 7 of 8 are done. The Streamlit app runs the full coach on a demo video, an uploaded video or the webcam: it recognizes the exercise, counts reps, gives one tip at a time with a form score, and saves every session. Validation on our own webcam clips (step 8) is next.
 >
-> **Run the demo:** `python -m streamlit run app/streamlit_app.py`. See [DEMO.md](DEMO.md) for the presentation guide.
+> **Run the demo:** `python -m streamlit run frontend/streamlit_app.py`. See [docs/DEMO.md](docs/DEMO.md) for the presentation guide.
 
 ## 1. What This Project Achieved
 
@@ -52,6 +52,8 @@ A personal trainer that runs on a laptop with a webcam. It recognizes the exerci
 
 ## 4. How It Works
 
+The full explanation, stage by stage, with every threshold and how the models are trained: [docs/HOW_IT_WORKS.md](docs/HOW_IT_WORKS.md).
+
 ```
 Webcam ─► 1 Capture ─► 2 Pose (33 points) ─► 3 Features (angles, smoothing, 30-frame window)
                                                  │
@@ -96,8 +98,8 @@ Goal: turn 33 landmarks into numbers that describe the movement.
 
 Goal: build a clean training set and know where detection fails.
 
-- `training/extract_keypoints.py` ran MediaPipe over every video into `data/processed/all.parquet`, keeping the labels, the 16 features and the raw 33 landmarks, so new features can be computed without rerunning MediaPipe.
-- `scripts/render_keypoints.py` drew the skeleton on 39 clips and wrote a quality report for all 1,041 videos. A frame is a "glitch" when an angle jumps by more than 40°.
+- `ml/data/extract_keypoints.py` ran MediaPipe over every video into `data/processed/all.parquet`, keeping the labels, the 16 features and the raw 33 landmarks, so new features can be computed without rerunning MediaPipe.
+- `ml/data/render_keypoints.py` drew the skeleton on 39 clips and wrote a quality report for all 1,041 videos. A frame is a "glitch" when an angle jumps by more than 40°.
 
 | Exercise | Flagged, front | Flagged, side | Flagged, diagonal |
 | --- | --- | --- | --- |
@@ -121,22 +123,22 @@ Goal: count reps with no machine learning.
 | Push-up | elbow | 150° | 100° | 72 to 79° |
 | Curl | elbow | 145° | 80° | 57 to 65° |
 
-Thresholds were set from the real angle curves and live in `configs/rules.yaml`.
+Thresholds were set from the real angle curves and live in `backend/coach/configs/rules.yaml`.
 
 ### Phase E: Form analyzer (rules done)
 
 - Every clip is cut into reps (4,620 reps, `data/processed/reps.parquet`). Good and bad clips of the same person were compared to find what differs: push-up hips sag and hands too far forward, curl reps partial and rushed; squat faults vary by person.
-- 11 rules in `configs/rules.yaml` (`"<measure> <op> <value>"`), each firing on only 5-9% of good reps. A clip is judged bad when over 30% of its reps have a fault: 72% of 244 clips correct (curl 76%, push-up 71%, squat 65%), on the clips used to tune them.
-- A Random Forest (200 trees, one per exercise, `training/train_form_model.py`) scores each rep from 0 to 100. Cross-validated by subject: 74% of clips right. It replaces the temporary rule-based score. The rules say what to fix, the model says how good the rep was overall.
+- 11 rules in `backend/coach/configs/rules.yaml` (`"<measure> <op> <value>"`), each firing on only 5-9% of good reps. A clip is judged bad when over 30% of its reps have a fault: 72% of 244 clips correct (curl 76%, push-up 71%, squat 65%), on the clips used to tune them.
+- A Random Forest (200 trees, one per exercise, `ml/training/train_form_model.py`) scores each rep from 0 to 100. Cross-validated by subject: 74% of clips right. It replaces the temporary rule-based score. The rules say what to fix, the model says how good the rep was overall.
 
 ### Phase F: Exercise classifier, feedback and app (done)
 
-- PyTorch LSTM (2 layers x 64 units, `training/train_classifier.py`) on the 30-frame window: `squat`, `pushup`, `curl` or `idle` (the 4 other dataset exercises stand in for idle). The label changes only after 5 consecutive votes above 70% confidence. Exported as TorchScript. On 5 unseen subjects: 96.7% of windows (squat 93%, curl 97%, push-up 100%) and 98% of clips.
+- PyTorch LSTM (2 layers x 64 units, `ml/training/train_classifier.py`) on the 30-frame window: `squat`, `pushup`, `curl` or `idle` (the 4 other dataset exercises stand in for idle). The label changes only after 5 consecutive votes above 70% confidence. Exported as TorchScript. On 5 unseen subjects: 96.7% of windows (squat 93%, curl 97%, push-up 100%) and 98% of clips.
 - Feedback engine: one tip at a time, safety before depth before tempo, 3-second cooldown, encouragement after 3 clean reps.
 - `coach/pipeline.py` runs every stage on each frame. In auto mode, a rep counter runs in parallel for each exercise, so the reps done while the LSTM is still deciding (about 3 s) are not lost.
 - If no rule fires but the Random Forest score is low, the coach gives a general tip ("Slow down and control the full movement") instead of praise.
-- Streamlit interface (`app/`): live coach (demo video, uploaded video or webcam), session report and history. Sessions are saved in SQLite (users, sessions, sets, reps, form events) with SQLAlchemy.
-- `scripts/make_demo_video.py` renders a backup demo video (`demo/coach_demo.mp4`, 3 min): six clips, good and bad form for each exercise, with the full overlay.
+- Streamlit interface (`frontend/`): live coach (demo video, uploaded video or webcam), session report and history. Sessions are saved in SQLite (users, sessions, sets, reps, form events) with SQLAlchemy.
+- `frontend/desktop/make_demo_video.py` renders a backup demo video (`data/demo/coach_demo.mp4`, 3 min): six clips, good and bad form for each exercise, with the full overlay.
 
 ## 6. Key Design Decisions
 
@@ -151,37 +153,64 @@ Thresholds were set from the real angle curves and live in `configs/rules.yaml`.
 
 | Script | Purpose | Status |
 | --- | --- | --- |
-| `training/extract_keypoints.py` | Run MediaPipe over every video into Parquet | Done |
-| `scripts/render_keypoints.py` | Draw the skeleton on clips, write the quality report | Done |
-| `scripts/eval_rep_counter.py` | Evaluate the rep counter against an offline peak count | Done |
-| `training/extract_rep_summaries.py` | Cut every clip into reps, one summary row per rep | Done |
-| `scripts/eval_form_rules.py` | Check the posture rules against the good/bad labels | Done |
-| `scripts/live_rep_counter.py` | Webcam demo: skeleton, count and state | Done |
-| `app/streamlit_app.py` | The application: live coach, session report, history | Done |
-| `scripts/make_demo_video.py` | Backup demo video with the full overlay | Done |
-| `training/train_classifier.py`, `training/train_form_model.py` | Train the LSTM and the Random Forest | Done |
-| `scripts/qevd_split_zip.py`, `training/extract_qevd.py`, `scripts/eval_qevd_squat.py` | Read, extract and test the QEVD dataset (front-view squats) | Done |
-| `scripts/benchmark_fps.py`, `scripts/record_clip.py` | Speed benchmark, record own clips | Planned |
+| `ml/data/extract_keypoints.py` | Run MediaPipe over every video into Parquet | Done |
+| `ml/data/render_keypoints.py` | Draw the skeleton on clips, write the quality report | Done |
+| `ml/evaluation/eval_rep_counter.py` | Evaluate the rep counter against an offline peak count | Done |
+| `ml/data/extract_rep_summaries.py` | Cut every clip into reps, one summary row per rep | Done |
+| `ml/evaluation/eval_form_rules.py` | Check the posture rules against the good/bad labels | Done |
+| `frontend/desktop/live_rep_counter.py` | Webcam demo: skeleton, count and state | Done |
+| `frontend/streamlit_app.py` | The application: live coach, session report, history | Done |
+| `frontend/desktop/make_demo_video.py` | Backup demo video with the full overlay | Done |
+| `ml/training/train_classifier.py`, `ml/training/train_form_model.py` | Train the LSTM and the Random Forest | Done |
+| `ml/data/qevd_split_zip.py`, `ml/data/extract_qevd.py`, `ml/evaluation/eval_qevd_squat.py` | Read, extract and test the QEVD dataset (front-view squats) | Done |
+| `ml/evaluation/benchmark_fps.py`, `ml/data/record_clip.py` | Speed benchmark, record own clips | Planned |
 
 ## 8. Reproducible Run Order
+
+On Windows without `make`, use `.	asks.ps1 <task>` (same tasks, plus `retrain`; `.	asks.ps1` lists them).
 
 **1. Install and test.**
 
 ```bash
-make install          # pip install -r requirements-dev.txt, then pip install -e .
+make install          # pip install -e ".[dev]" (dependencies are in pyproject.toml)
 make test
 ```
 
-**2. Get the pose model.** Download [pose_landmarker_full.task](https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task) into `models/` (it is not in Git).
+**2. Get the pose model.** Download [pose_landmarker_full.task](https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task) into `data/models/` (it is not in Git).
 
 **3. Run the app.**
 
 ```bash
-make run              # = python -m streamlit run app/streamlit_app.py, then open http://localhost:8501
-make demo-video       # backup video: demo/coach_demo.mp4
+make run              # = python -m streamlit run frontend/streamlit_app.py, then open http://localhost:8501
+make demo-video       # backup video: data/demo/coach_demo.mp4
 ```
 
-The trained models (`models/exercise_lstm.pt`, `models/form_model.joblib`) are stored with [Git LFS](https://git-lfs.com): run `git lfs install` before cloning, or `git lfs pull` after. Retraining takes about 4 minutes with `training/train_classifier.py` and `training/train_form_model.py`, but first needs the dataset and the extraction of step 4 (about an hour). The demo videos come from that dataset and are not in Git; without it, use an uploaded video or the webcam. Stand side-on to the camera: detection is reliable from the side, not from the front.
+The trained models (`data/models/exercise_lstm.pt`, `data/models/form_model.joblib`) are stored with [Git LFS](https://git-lfs.com): run `git lfs install` before cloning, or `git lfs pull` after. Retraining takes about 4 minutes with `ml/training/train_classifier.py` and `ml/training/train_form_model.py`, but first needs the dataset and the extraction of step 4 (about an hour). The demo videos come from that dataset and are not in Git; without it, use an uploaded video or the webcam. Stand side-on to the camera: detection is reliable from the side, not from the front.
+
+**3b. Without the Mendeley videos: QEVD-FIT-300k demo clips.** Put the `QEVD-FIT-300k-Part-*.zip` archives in `data/`, then:
+
+```bash
+python ml/data/qevd_split_zip.py build data data/raw/qevd_fit300k   # readable squat / push-up clips + clips_index.csv
+```
+
+Each archive is the last piece of a split zip (`.z01`, `.z02`, `.zip`). With only the `.zip` pieces, 758 squat and push-up clips are readable (405 squats, 353 push-ups); the labels come from `fine_grained_labels.json` inside the archive. The app then offers QEVD demo clips (front view). Without `data/models/exercise_lstm.pt` the app hides "Auto-detect": pick the exercise by hand. Without `data/models/form_model.joblib` the form score comes from the rules.
+
+**Form decision and corrections.** Every counted rep gets a verdict: good form (no rule fired and score ≥ 50) or form to fix. Each rule in `backend/coach/configs/rules.yaml` has a short `tip` shown during the set and a `fix`: how to correct it, following common coaching practice. The live page shows the verdict, the tip and "How to correct it"; the session report shows good versus to-fix reps, a correction for every fault seen and a best-practice checklist per exercise.
+
+**Camera.** Choose **Webcam** on the Live coach page: the app lists the cameras it finds (built-in laptop camera or USB webcam). Plugged one in later? Press **Detect cameras**.
+
+**Retrain on Mendeley + QEVD.** Both training scripts read every dataset present in `data/processed/` (`all.parquet` = Mendeley, `qevd.parquet` = QEVD) and print results per dataset and per camera view. Write to `data/models/candidates/` first to compare with the current models:
+
+```bash
+python ml/data/extract_qevd.py --workers 10          # QEVD clips -> qevd.parquet (skips clips already done)
+python ml/data/extract_rep_summaries.py              # reps of both datasets -> reps.parquet
+python ml/training/train_classifier.py --out data/models/candidates/exercise_lstm.pt
+python ml/training/train_form_model.py --out data/models/candidates/form_model.joblib
+```
+
+`--sources mendeley` rebuilds the original models; without Mendeley there is no curl and no side view, and the scripts say so. QEVD has no person ID, so its scores are slightly optimistic.
+
+**Next steps** (better models, web interface, camera): see [docs/NEXT_STEPS.md](docs/NEXT_STEPS.md).
 
 **4. Rebuild the dataset results** (needs the videos in `data/raw/`, see below).
 
@@ -196,8 +225,8 @@ make eval-form        # posture rules evaluation
 **With Docker** (Streamlit app on port 8501, MLflow on port 5000; the webcam mode needs the app to run locally, not in Docker):
 
 ```bash
-cp .env.example .env
-docker compose up --build
+cp deploy/.env.example deploy/.env
+docker compose -f deploy/docker-compose.yml up --build
 ```
 
 ## 9. Data
@@ -208,16 +237,36 @@ Mendeley dataset "fitness exercises, good and bad form" (CC BY 4.0): 1,042 video
 
 ```
 ai-workout-coach/
-├── app/            Streamlit pages (live, report, history)
-├── configs/        app.yaml, rules.yaml, model.yaml
-├── data/           raw videos, processed Parquet, labels, SQLite db (not in Git)
-├── docker/         Dockerfile
-├── docs/           architecture.md
-├── models/         pose model, trained models later
-├── scripts/        quality checks, evaluations, demo video, QEVD tools
-├── src/coach/      capture, pose, features, reasoning, feedback, db, pipeline
-├── tests/          unit tests (34 passing)
-└── training/       extraction, then training, evaluation and export
+├── frontend/                 What the user sees
+│   ├── streamlit_app.py      web app entry point (navigation between the views)
+│   ├── views/                live coach, session report, history
+│   ├── ui.py                 shared look: cards, report, best-practice texts
+│   └── desktop/              OpenCV window demo (live_rep_counter.py), backup demo video
+├── backend/                  The coach engine (Python package `coach`, used by the frontend)
+│   └── coach/
+│       ├── capture/          camera: built-in or USB, background capture thread
+│       ├── pose/             MediaPipe pose landmarker, skeleton drawing
+│       ├── features/         joint angles, One Euro smoothing, 30-frame window
+│       ├── reasoning/        exercise classifier (LSTM), rep counter, form analyzer
+│       ├── feedback/         one tip at a time + how to correct it
+│       ├── db/               SQLite sessions, sets, reps, form events
+│       ├── configs/          app.yaml, rules.yaml (thresholds, tips, corrections), model.yaml
+│       ├── pipeline.py       runs every stage on each frame
+│       └── datasets.py       Mendeley + QEVD loading for training
+├── ml/                       Offline machine learning
+│   ├── data/                 dataset tools: QEVD split-zip reader, keypoint extraction, rep summaries
+│   ├── training/             train the LSTM classifier and the Random Forest form model
+│   └── evaluation/           rep counter, form rules, QEVD faults, FPS benchmark
+├── data/                     Not in Git, except the models (Git LFS)
+│   ├── models/               pose model, exercise_lstm.pt, form_model.joblib
+│   ├── raw/  processed/      videos, extracted features (Parquet)
+│   └── db/  mlruns/  demo/   local database, training runs, demo video
+├── deploy/                   Dockerfile, docker-compose.yml, .env.example
+├── docs/                     how it works, architecture, demo guide, project description, next steps
+├── tests/                    unit tests
+├── pyproject.toml            package, dependencies (pip install -e ".[dev]"), pytest and ruff settings
+├── Makefile, tasks.ps1       common commands (tasks.ps1 for Windows)
+└── README.md, LICENSE
 ```
 
 ## 11. Risks and Open Questions
@@ -239,7 +288,7 @@ ai-workout-coach/
 | Interface | Streamlit (webcam through OpenCV) |
 | Tooling | MLflow, Docker, docker-compose, Makefile, pytest |
 
-Full project description: [PROJECT_DESCRIPTION.md](PROJECT_DESCRIPTION.md).
+Full project description: [docs/PROJECT_DESCRIPTION.md](docs/PROJECT_DESCRIPTION.md).
 
 ## License
 
