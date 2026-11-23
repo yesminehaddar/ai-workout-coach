@@ -5,9 +5,9 @@ Le choix de l'exercice est manuel ici (le classifieur LSTM viendra à l'étape 6
 Placez-vous DE PROFIL face à la caméra : c'est la vue où la détection est fiable.
 
 Usage :
-    python scripts/live_rep_counter.py --exercise squat              # webcam 0
-    python scripts/live_rep_counter.py --exercise curl --source data/raw/fitness_form/subject_001_bicep_curl_good_side.mp4
-    python scripts/live_rep_counter.py --exercise squat --source video.mp4 --no-display   # test sans fenêtre
+    python frontend/desktop/live_rep_counter.py --exercise squat              # webcam 0
+    python frontend/desktop/live_rep_counter.py --exercise curl --source data/raw/fitness_form/subject_001_bicep_curl_good_side.mp4
+    python frontend/desktop/live_rep_counter.py --exercise squat --source video.mp4 --no-display   # test sans fenêtre
 Touches : q = quitter, r = remettre à zéro.
 """
 import argparse

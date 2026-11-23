@@ -8,9 +8,9 @@ BONES = [(11, 12), (11, 13), (13, 15), (12, 14), (14, 16), (11, 23), (12, 24), (
 LEFT_POINTS = {11, 13, 15, 23, 25, 27, 29, 31}
 
 WHITE = (255, 255, 255)
-LEFT_COLOR = (255, 120, 0)    # bleu (BGR)
-RIGHT_COLOR = (0, 140, 255)   # orange (BGR)
-NOSE_COLOR = (0, 220, 0)
+LEFT_COLOR = (29, 243, 200)   # Volt #C8F31D (BGR)
+RIGHT_COLOR = (61, 106, 255)  # Ember #FF6A3D (BGR)
+NOSE_COLOR = (255, 255, 255)
 
 
 def draw_skeleton(img: np.ndarray, points: dict[int, tuple[float, float]] | list,

@@ -1,13 +1,28 @@
+# Palette : Ink #0F1411 (texte, sections sombres, boutons), Paper #F5F4EF (fond), White #FFFFFF
+# (cartes, champs), Volt #C8F31D (accent principal), Ember #FF6A3D (accent secondaire),
+# Moss #3C4A40 (texte secondaire sur clair), Line #DEDCD3 (bordures), Mist #C9D0CA (texte secondaire sur sombre).
 [theme]
-base = "dark"
-primaryColor = "#4c8bf5"
-backgroundColor = "#0f1117"
-secondaryBackgroundColor = "#1a1d27"
-textColor = "#e8eaf0"
+base = "light"
+primaryColor = "#C8F31D"
+backgroundColor = "#F5F4EF"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#0F1411"
+borderColor = "#DEDCD3"
+showWidgetBorder = true
+baseRadius = "10px"
 font = "sans serif"
+
+[theme.sidebar]
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F5F4EF"
+textColor = "#0F1411"
+borderColor = "#DEDCD3"
 
 [server]
 maxUploadSize = 500
 
 [browser]
 gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"   # pas de bouton Deploy ni menu développeur

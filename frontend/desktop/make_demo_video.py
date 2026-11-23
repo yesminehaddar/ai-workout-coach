@@ -1,7 +1,7 @@
 """Vidéo de démo de secours : les 6 clips de démo passés dans le coach, avec un carton titre
 avant chaque clip et le bilan à la fin. À montrer si l'application ou la webcam font défaut.
 
-Usage : python scripts/make_demo_video.py  -> demo/coach_demo.mp4 (1280x720, 30 fps, H.264)
+Usage : python frontend/desktop/make_demo_video.py  -> data/demo/coach_demo.mp4 (1280x720, 30 fps, H.264)
 Le H.264 passe par imageio-ffmpeg (pip install imageio-ffmpeg) ; sans lui, le fichier reste en
 MPEG-4 brut, lisible mais ~20 fois plus gros.
 """
@@ -12,11 +12,11 @@ import cv2
 import numpy as np
 
 from coach.config import load_config
+from coach.demo_clips import CLIPS, DEMO_CLIPS
 from coach.pipeline import CoachPipeline
 from coach.pose.skeleton import put_text
-from coach.ui import CLIPS, DEMO_CLIPS
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 W, H, FPS = 1280, 720, 30
 BG = (23, 17, 15)
 
@@ -52,7 +52,7 @@ def open_writer(path: Path) -> cv2.VideoWriter:
 
 def main():
     app, rules = load_config("app"), load_config("rules")
-    out = ROOT / "demo" / "coach_demo.mp4"
+    out = ROOT / "data" / "demo" / "coach_demo.mp4"
     raw = out.with_name("_raw.mp4")
     out.parent.mkdir(exist_ok=True)
     wr = open_writer(raw)

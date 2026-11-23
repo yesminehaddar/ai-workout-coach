@@ -2,14 +2,14 @@
 import pandas as pd
 import streamlit as st
 
-from coach.ui import card, exercise_names, repository, setup_page
+from ui import INK, card, exercise_names, repository, setup_page
 
 setup_page()
-st.title("📈 History")
+st.title("History")
 
 sessions = repository().list_sessions()
 if not sessions:
-    st.info("No session yet. Run one on the **Live coach** page.")
+    st.info("No session yet. Start one on the Live coach page.")
     st.stop()
 
 df = pd.DataFrame(sessions)
@@ -17,14 +17,14 @@ cols = st.columns(3)
 cols[0].markdown(card("Sessions", str(len(df))), unsafe_allow_html=True)
 cols[1].markdown(card("Total reps", str(int(df.reps.sum()))), unsafe_allow_html=True)
 best = df.avg_score.max()
-cols[2].markdown(card("Best average score", f"{best:.0f}" if pd.notna(best) else "–", "out of 100"),
+cols[2].markdown(card("Best average score", f"{best:.0f}" if pd.notna(best) else "-", "out of 100"),
                  unsafe_allow_html=True)
 
 scored = df.dropna(subset=["avg_score"])
 if len(scored) > 1:
     st.subheader("Average form score over time")
     trend = scored.set_index(pd.Index(scored["id"], name="session"))["avg_score"]
-    st.line_chart(trend, height=260, color="#4c8bf5", x_label="session", y_label="average score")
+    st.line_chart(trend, height=260, color=INK, x_label="session", y_label="average score")
 
 st.subheader("All sessions")
 table = df.assign(exercises=df.exercises.map(exercise_names), date=df.started_at.dt.strftime("%d %b %Y, %H:%M"),
