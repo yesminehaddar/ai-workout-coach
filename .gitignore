@@ -4,7 +4,8 @@ __pycache__/
 venv/
 .env
 .ipynb_checkpoints/
-mlruns/
+data/mlruns/
+mlruns/        # filet de sécurité : MLflow lancé hors des scripts du projet
 data/raw/*
 data/processed/*
 data/db/*.db
@@ -12,10 +13,16 @@ data/db/*.db
 .pytest_cache/
 .DS_Store
 
-# Généré (scripts/render_keypoints.py, scripts/eval_rep_counter.py)
+# Généré (ml/data/render_keypoints.py, ml/evaluation/eval_rep_counter.py)
 data/keypoint_previews/
 # Modèle de pose MediaPipe (téléchargé, voir README)
-models/*.task
+data/models/*.task
 *.egg-info/
 .ruff_cache/
-demo/
+data/demo/
+
+# Archives QEVD-FIT-300k (7,6 Go, voir ml/data/qevd_split_zip.py)
+data/*.zip
+data/*.z0[0-9]
+# Modèles candidats (réentraînement, à comparer avant de remplacer data/models/)
+data/models/candidates/

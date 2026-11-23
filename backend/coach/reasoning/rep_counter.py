@@ -11,7 +11,7 @@ Les trois exercices ont la même forme : l'angle suivi est grand en position de 
 Demi-tour avant BOTTOM -> répétition « partial », non comptée (seulement si la descente
 dépasse min_partial_depth degrés, pour ignorer le bruit autour du seuil).
 On ne compte rien tant qu'on n'a pas vu une première position TOP (départ en plein mouvement).
-Seuils par exercice : configs/rules.yaml (rep_counter).
+Seuils par exercice : backend/coach/configs/rules.yaml (rep_counter).
 
 Calibration du haut : certaines personnes (ou angles de caméra) n'atteignent jamais top_above
 (ex. bras qui plafonne à 145° alors que le seuil est 150°). On suit donc l'angle maximum des

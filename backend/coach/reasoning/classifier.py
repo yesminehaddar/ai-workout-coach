@@ -16,7 +16,7 @@ CLASSES = ["squat", "pushup", "curl", "idle"]
 
 
 class ExerciseLSTM(nn.Module):
-    """Définition du réseau (utilisée par training/train_classifier.py)."""
+    """Définition du réseau (utilisée par ml/training/train_classifier.py)."""
 
     def __init__(self, input_features: int = 16, hidden_size: int = 64, num_layers: int = 2,
                  num_classes: int = 4, dropout: float = 0.3):

@@ -1,7 +1,7 @@
 """Stage 2 : MediaPipe PoseLandmarker (BlazePose) -> 33 landmarks (x, y, z, visibility).
 
 x et y sont normalisés (0-1) dans l'image ; z est relatif aux hanches (peu fiable, on ne s'en sert pas).
-Le modèle .task est téléchargé dans models/ (voir README).
+Le modèle .task est téléchargé dans data/models/ (voir README).
 """
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,7 +11,7 @@ import numpy as np
 from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python import vision
 
-DEFAULT_MODEL = Path(__file__).resolve().parents[3] / "models" / "pose_landmarker_full.task"
+DEFAULT_MODEL = Path(__file__).resolve().parents[3] / "data" / "models" / "pose_landmarker_full.task"
 
 # Indices MediaPipe utilisés par le projet.
 NOSE = 0
