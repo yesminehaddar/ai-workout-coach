@@ -20,7 +20,7 @@ from coach.feedback.engine import FeedbackEngine
 from coach.pose.estimator import PoseEstimator
 from coach.pose.skeleton import draw_skeleton, put_text
 from coach.reasoning.classifier import ExerciseClassifier
-from coach.reasoning.form_analyzer import FormAnalyzer
+from coach.reasoning.form_analyzer import FormAnalyzer, verdict
 from coach.reasoning.rep_counter import RepCounter
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -29,6 +29,10 @@ CLASSIFIER_FPS = 15.0  # le LSTM a appris sur des fenêtres de 30 frames à 15 f
 REP_GRACE_S = 4.0
 TIP_SHOW_S = 3.0
 NO_POSE_MSG_S = 1.0
+SAY_REPEAT_S = 6.0  # une même consigne n'est pas relue avant ce délai
+PARTIAL_TIP, PARTIAL_SAY = "Go a bit further", "Go further"
+PARTIAL_FIX = ("That rep did not reach the bottom position, so it was not counted. Move through "
+               "the full range of motion on every rep, even if you need fewer reps or less weight.")
 
 
 @dataclass
@@ -40,6 +44,7 @@ class RepRecord:
     score: float
     faults: list
     summary: dict
+    verdict: str = "bad"  # décision de forme : "good" ou "bad"
 
 
 @dataclass
@@ -53,6 +58,9 @@ class FrameResult:
     pose_found: bool = False
     partial_count: int = 0
     new_rep: RepRecord | None = None
+    fix: str | None = None       # comment corriger le défaut du conseil affiché
+    verdict: str | None = None   # décision de forme de la dernière rep
+    say: str | None = None       # consigne à lire à voix haute maintenant (une seule fois)
 
 
 @dataclass
@@ -89,7 +97,10 @@ class CoachPipeline:
         self.n_frames = 0
         self.exercise = None if self.mode == "auto" else self.mode
         self.confidence = 1.0 if self.mode != "auto" else 0.0
-        self.tip, self.tip_at = None, -1e9
+        self.tip, self.tip_at, self.fix = None, -1e9, ""
+        self._say: str | None = None
+        self._said_at: dict[str, float] = {}
+        self.last_verdict: str | None = None
         self.last_score: float | None = None
         self.last_pose_t = 0.0
         self.log = SessionLog()
@@ -112,14 +123,18 @@ class CoachPipeline:
             self._classify(f, t)
             new_rep = self._count(f, t)
         elif t - self.last_pose_t > NO_POSE_MSG_S:
-            self._set_tip("Step back so I can see you", t, log=False)
+            self._set_tip("Step back so I can see you", t, log=False, say="Step back",
+                          fix="Your whole body must be in the picture. Stand side-on, 2-3 m from the camera.")
         ex = self.exercise
         c = self.counters[ex] if ex else None
+        showing = t - self.tip_at < TIP_SHOW_S
         return FrameResult(
             exercise=ex, rep_count=(c.count - self.base[ex]) if c else 0,
-            tip=self.tip if t - self.tip_at < TIP_SHOW_S else None, form_score=self.last_score,
+            tip=self.tip if showing else None, form_score=self.last_score,
             confidence=self.confidence, pose_found=lm is not None,
-            partial_count=c.partial_count if c else 0, new_rep=new_rep)
+            partial_count=c.partial_count if c else 0, new_rep=new_rep,
+            fix=(self.fix or None) if showing else None, verdict=self.last_verdict,
+            say=self._pop_say())
 
     def _classify(self, f: dict, t: float) -> None:
         if self.classifier is None:
@@ -151,8 +166,9 @@ class CoachPipeline:
             if ev is None:
                 continue
             faults = self.analyzer.check_rules(ex, ev)
+            score = self.analyzer.form_score(ev, faults)
             rec = RepRecord(ex, (c.count - self.base[ex]) if ev["counted"] else None, ev["counted"], t,
-                            self.analyzer.form_score(ev, faults), faults, ev)
+                            score, faults, ev, verdict(faults, score) if ev["counted"] else "bad")
             if ex == self.exercise:
                 self.log.reps.append(rec)
                 active = rec
@@ -161,18 +177,28 @@ class CoachPipeline:
                 self.pending[ex] = [r for r in self.pending[ex] if r.t >= t - REP_GRACE_S]
         if active is not None:
             self.last_score = active.score
+            self.last_verdict = active.verdict
             tip = self.feedback.choose_tip(active.faults, t, active.score)
+            fix = self.feedback.last_fix if tip else ""
+            say = self.feedback.last_say if tip else ""
             if not active.counted and not tip:
-                tip = "Go a bit further"
+                tip, fix, say = PARTIAL_TIP, PARTIAL_FIX, PARTIAL_SAY
             if tip:
-                self._set_tip(tip, t)
+                self._set_tip(tip, t, fix=fix, say=say)
         return active
 
-    def _set_tip(self, text: str, t: float, log: bool = True) -> None:
+    def _set_tip(self, text: str, t: float, log: bool = True, fix: str = "", say: str = "") -> None:
+        if say and t - self._said_at.get(say, -1e9) >= SAY_REPEAT_S:
+            self._said_at[say] = t
+            self._say = say
         if text != self.tip or t - self.tip_at >= TIP_SHOW_S:
-            self.tip, self.tip_at = text, t
+            self.tip, self.tip_at, self.fix = text, t, fix
             if log:
                 self.log.tips.append((t, text))
+
+    def _pop_say(self) -> str | None:
+        say, self._say = self._say, None
+        return say
 
     # ------------------------------------------------------------------ affichage
     def annotate(self, frame_bgr: np.ndarray, r: FrameResult, panel: bool = True) -> np.ndarray:
@@ -195,6 +221,8 @@ class CoachPipeline:
         put_text(img, f"{name}   reps: {r.rep_count}", (int(15 * s), int(50 * s)), 1.3 * s, (0, 255, 0))
         sub = f"score {r.form_score:.0f}/100" if r.form_score is not None else "score -"
         sub += f"   partial {r.partial_count}"
+        if r.verdict:
+            sub += "   GOOD FORM" if r.verdict == "good" else "   FIX FORM"
         color = (255, 255, 255) if r.form_score is None else (
             (113, 204, 46) if r.form_score >= 75 else (18, 156, 243) if r.form_score >= 50 else (60, 76, 231))
         put_text(img, sub, (int(15 * s), int(95 * s)), 0.8 * s, color)
@@ -219,6 +247,7 @@ class CoachPipeline:
                 for f in r.faults:
                     faults[f.code] = faults.get(f.code, 0) + 1
             out[ex] = {"reps": len(counted), "partial": len(reps) - len(counted),
+                       "good_reps": sum(r.verdict == "good" for r in counted),
                        "avg_score": float(np.mean([r.score for r in counted])) if counted else None,
                        "faults": dict(sorted(faults.items(), key=lambda kv: -kv[1]))}
         return out

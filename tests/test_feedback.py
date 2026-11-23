@@ -30,3 +30,27 @@ def test_low_score_without_rule_gets_general_tip():
     fb = FeedbackEngine(encourage_after=1)
     assert fb.choose_tip([], 0, score=20) == "Slow down and control the full movement"
     assert fb.choose_tip([], 5, score=90) is not None  # bon score : encouragement
+
+
+def test_last_fix_follows_the_tip():
+    fb = FeedbackEngine(encourage_after=1)
+    lean = Fault("SQUAT_LEAN", "Chest up!", 1, "Brace your core and keep your chest proud.")
+    assert fb.choose_tip([lean], now=0) == "Chest up!"
+    assert fb.last_fix == "Brace your core and keep your chest proud."
+    assert fb.choose_tip([], now=5) is not None  # encouragement : pas de correction
+    assert fb.last_fix == ""
+
+
+def test_spoken_cue_is_short_and_follows_the_tip():
+    fb = FeedbackEngine(encourage_after=2)
+    deeper = Fault("SQUAT_SHALLOW", "Go a bit lower", 2, "Sit down until thighs are parallel.", "Go deeper")
+    assert fb.choose_tip([deeper], now=0) == "Go a bit lower" and fb.last_say == "Go deeper"
+    assert fb.choose_tip([], now=5) is None              # 1 rep propre : rien
+    assert fb.choose_tip([], now=6) is not None          # 2 reps propres : encouragement
+    assert fb.last_say == "Great, keep going"
+
+
+def test_fault_without_spoken_cue_reads_the_tip():
+    fb = FeedbackEngine()
+    fb.choose_tip([Fault("X", "Hands under your shoulders", 3)], now=0)
+    assert fb.last_say == "Hands under your shoulders"

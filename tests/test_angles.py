@@ -1,7 +1,7 @@
 """Tests de features/angles.py."""
 import pytest
 
-from coach.features.angles import FEATURE_NAMES, compute_features, joint_angle
+from coach.features.angles import EXTRA_FEATURES, FEATURE_NAMES, compute_features, joint_angle
 from coach.pose.estimator import Landmark
 
 
@@ -30,7 +30,7 @@ def _standing(vis_left=1.0, vis_right=0.2):
 
 def test_compute_features_standing():
     f = compute_features(_standing())
-    assert set(f) == set(FEATURE_NAMES)
+    assert set(f) == set(FEATURE_NAMES) | set(EXTRA_FEATURES)
     assert f["knee"] == pytest.approx(180, abs=1)
     assert f["elbow"] == pytest.approx(180, abs=1)
     assert f["torso_lean"] == pytest.approx(0, abs=1)

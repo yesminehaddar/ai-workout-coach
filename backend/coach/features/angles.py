@@ -44,6 +44,11 @@ FEATURE_NAMES = [
     "side",            # 0 = gauche, 1 = droit
 ]
 
+# Mesures en plus, pour les règles de posture seulement (le LSTM ne voit que FEATURE_NAMES).
+EXTRA_FEATURES = (
+    "stance_width",    # écart des chevilles / largeur d'épaules (pieds trop serrés < ~0.85, vue de face)
+)
+
 
 def _xy(p) -> np.ndarray:
     if hasattr(p, "x"):
@@ -116,6 +121,7 @@ def compute_features(landmarks, aspect: float = 1.0) -> dict[str, float]:
         "elbow_height": float((sh[1] - el[1]) / torso),
         "shoulder_width": sh_width / torso,
         "knee_spread": knee_gap / ankle_gap if ankle_gap > 1e-6 else 1.0,
+        "stance_width": ankle_gap / sh_width if sh_width > 1e-6 else 1.0,  # 1.0 = neutre, comme knee_spread
         "elbow_flare": elbow_gap / sh_width if sh_width > 1e-6 else 1.0,
         "wrist_forward": float(forward * (wr[0] - sh[0]) / torso),
         "visibility": float(np.mean([landmarks[i].visibility for i in SIDE_JOINTS[side]])),

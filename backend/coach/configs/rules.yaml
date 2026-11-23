@@ -1,0 +1,125 @@
+# Seuils réglés sur le dataset Mendeley (vues de profil ; + diagonale pour la pompe), 9 nov. 2026.
+# Médianes par clip : squat genou 66-72° en bas / ~175° en haut ; pompe coude 72-79° / ~168° ;
+# curl coude 57-65° / ~168°. Voir ml/evaluation/eval_rep_counter.py.
+rep_counter:
+  squat:  {angle: knee,  top_above: 160, bottom_below: 100}
+  pushup: {angle: elbow, top_above: 150, bottom_below: 100}
+  curl:   {angle: elbow, top_above: 145, bottom_below: 80}
+
+# Règles de posture, vérifiées sur le résumé de chaque rep (min_X, max_X, range_X = max - min
+# de la feature X pendant la rep, tempo_s = durée de la rep). Syntaxe : "<mesure> <op> <valeur>".
+# priority : 1 = sécurité, 2 = amplitude, 3 = tempo / placement.
+# Seuils réglés le 15 nov. 2026 sur les reps du dataset (vues de profil ; + diagonale pompe/curl) :
+# chaque règle se déclenche sur 5-9 % des reps « good » (taux entre crochets : good / bad).
+# Voir ml/evaluation/eval_form_rules.py.
+#
+# view : vue de la caméra où la règle est valable (front, side ; absent = toutes). La vue d'une rep
+# vient de la largeur des épaules (coach.reasoning.form_analyzer.rep_view). Règles « front » réglées le
+# 24 nov. 2026 sur les squats QEVD (webcam de face) : seuil = 10 % de fausses alertes sur les reps
+# propres du train, mesuré sur le test (ml/evaluation/eval_qevd.py).
+#
+# tip : consigne affichée pendant la série. say : la même, en 2-3 mots, lue à voix haute.
+# fix : comment corriger (bonne pratique), affiché sous le conseil et dans le bilan de séance.
+form_rules:
+  squat:
+    - code: SQUAT_LEAN           # [7% / 5%] sécurité, ne sépare pas good/bad ici
+      check: "max_torso_lean > 55"
+      view: side
+      tip: "Chest up!"
+      say: "Chest up"
+      priority: 1
+      fix: "Brace your core and keep your chest proud, eyes forward. Start the descent by bending hips and knees together, keep your weight over the middle of the foot with heels down. If you still tip forward, use a wider stance or squat to a box until ankle mobility improves."
+    - code: SQUAT_SHALLOW        # [8% / 25%]
+      check: "min_knee > 85"
+      view: side
+      tip: "Go a bit lower"
+      say: "Go deeper"
+      priority: 2
+      fix: "Sit down until your thighs are about parallel to the floor (hip crease level with the knee) while keeping your back neutral and heels down. Lower slowly and pause briefly at the bottom; squatting to a box or chair at the right height helps learn the depth."
+    - code: SQUAT_KNEES_FORWARD  # [5% / 16%]
+      check: "max_knee_forward > 0.52"
+      view: side
+      tip: "Sit back, knees behind toes"
+      say: "Sit back"
+      priority: 2
+      fix: "Push your hips back as if sitting on a chair behind you and keep your weight on the heels and mid-foot. Knees may pass the toes a little, but they should track in line with the toes and the heels must stay on the floor."
+    # --- Vue de face (QEVD, clips test : défaut détecté / fausses alertes sur reps propres) ---
+    - code: SQUAT_LEAN           # [front] « back not straight » 54 % / 0 % : de face, se pencher raccourcit le torse
+      check: "max_shoulder_width > 0.96"
+      view: front
+      tip: "Keep your back straight"
+      say: "Back straight"
+      priority: 1
+      fix: "Brace your core and keep your chest proud, eyes forward. Start the descent by bending hips and knees together, keep your weight over the middle of the foot with heels down. If you still tip forward, use a wider stance or squat to a box until ankle mobility improves."
+    - code: SQUAT_KNEES_IN       # [front] genoux qui rentrent ; seuil = 5 % des reps propres (QEVD n'étiquette pas ce défaut)
+      check: "min_knee_spread < 0.80"
+      view: front
+      tip: "Push your knees out"
+      say: "Knees out"
+      priority: 1
+      fix: "Push your knees outwards so they stay in line with your toes, on the way down and on the way up. Spread the floor with your feet and squeeze your glutes. If they still cave in, squat less deep or lighter, and try a mini band just above the knees as a reminder."
+    - code: SQUAT_SHALLOW        # [front] « shallow » 53 % / 7 % : les hanches restent hautes
+      check: "min_hip_height > 1.17"
+      view: front
+      tip: "Go a bit lower"
+      say: "Go deeper"
+      priority: 2
+      fix: "Sit down until your thighs are about parallel to the floor (hip crease level with the knee) while keeping your back neutral and heels down. Lower slowly and pause briefly at the bottom; squatting to a box or chair at the right height helps learn the depth."
+    - code: SQUAT_NARROW         # [front] « narrow » 91 % / 5 % : écart des chevilles / largeur d'épaules
+      check: "max_stance_width < 0.87"
+      view: front
+      tip: "Feet a bit wider"
+      say: "Feet wider"
+      priority: 3
+      fix: "Stand with your feet about shoulder-width apart, toes turned slightly out (15 to 30 degrees). A stance that is too narrow tips you forward and makes depth harder."
+    - code: SQUAT_FAST           # [6% / 25%] en dernier : à priorité égale, le placement des pieds passe avant le tempo
+      check: "tempo_s < 1.07"
+      tip: "Slow down, control the descent"
+      say: "Slow down"
+      priority: 3
+      fix: "Take 2-3 seconds to go down, pause for a moment at the bottom, then stand up with control. Breathe in on the way down and out on the way up; never bounce out of the bottom."
+  pushup:
+    - code: PUSHUP_SAG           # [6% / 28%] ; de face la ligne du corps ne se mesure pas (81 % de fausses alertes QEVD)
+      check: "min_body_line < 148"
+      view: side
+      tip: "Tighten your core, hips up"
+      say: "Hips up"
+      priority: 1
+      fix: "Keep one straight line from head to heels: squeeze your glutes, brace your abs and tuck the pelvis slightly. If the hips still drop, do push-ups with hands on a bench or on your knees until you can hold the plank."
+    - code: PUSHUP_SHALLOW       # [9% / 25%]
+      check: "min_elbow > 100"
+      tip: "Lower your chest"
+      say: "Go lower"
+      priority: 2
+      fix: "Lower until your chest is a fist's height from the floor (elbows at about 90 degrees), with elbows about 45 degrees from your body. Use an incline (hands on a bench) to train the full range before going back to the floor."
+    - code: PUSHUP_HANDS_FORWARD # [5% / 15%]
+      check: "max_wrist_forward > -0.02"
+      tip: "Hands under your shoulders"
+      say: "Hands under shoulders"
+      priority: 3
+      fix: "Place your hands slightly wider than your shoulders, directly under them, fingers pointing forward. At the bottom your wrists should be under or slightly in front of your elbows."
+  curl:
+    - code: CURL_BODY_SWING      # [6% / 13%]
+      check: "range_torso_lean > 6.5"
+      tip: "Don't swing your body"
+      say: "Don't swing"
+      priority: 1
+      fix: "Stand tall with knees soft, core braced and shoulders back, and keep the torso still during the whole rep. If you need to lean back to lift, the weight is too heavy: use a lighter one or curl with your back against a wall."
+    - code: CURL_SWING           # [5% / 18%]
+      check: "range_shoulder > 19"
+      tip: "Keep elbows still"
+      say: "Pin your elbows"
+      priority: 1
+      fix: "Keep your elbows pinned to your sides; only the forearm should move. Raising the elbows makes the shoulder do the work; lighten the weight if you cannot keep the upper arm still."
+    - code: CURL_PARTIAL         # [7% / 30%]
+      check: "min_elbow > 70"
+      tip: "Squeeze to the top"
+      say: "Full range"
+      priority: 2
+      fix: "Use the full range: start with arms almost straight, curl until the weight is near the shoulder and squeeze the biceps for a second at the top, then lower all the way down."
+    - code: CURL_FAST            # [4% / 36%]
+      check: "tempo_s < 1.0"
+      tip: "Slow down, control the weight"
+      say: "Slow down"
+      priority: 3
+      fix: "Lift in about 1-2 seconds and lower in 2-3 seconds; the lowering part builds strength too. Exhale on the way up, inhale on the way down."

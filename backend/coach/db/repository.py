@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
 
 from coach.db.models import ExerciseSet, FormEvent, Rep, Session, User
+from coach.reasoning.form_analyzer import verdict
 
 
 class SessionRepository:
@@ -88,8 +89,10 @@ class SessionRepository:
                 for r in st.reps:
                     for e in r.events:
                         faults[e.fault_code] = faults.get(e.fault_code, 0) + 1
+                counted = [r for r in st.reps if r.counted]
                 sets.append({"exercise": st.exercise, "reps": st.rep_count, "partial": st.partial_count,
-                             "scores": [r.form_score for r in st.reps if r.counted],
+                             "scores": [r.form_score for r in counted],
+                             "verdicts": [verdict(r.events, r.form_score) for r in counted],
                              "faults": faults})
             return {"id": s.id, "started_at": s.started_at, "duration_s": s.duration_s,
                     "avg_score": s.avg_score, "sets": sets}

@@ -73,3 +73,64 @@ def test_works_on_rep_counter_output():
             reps.append(e)
     assert len(reps) == 1 and reps[0]["counted"]
     assert [f.code for f in fa.check_rules("squat", reps[0])] == ["SQUAT_SHALLOW"]
+
+
+def test_fault_carries_fix_text():
+    rules = {"squat": [{"code": "SQUAT_SHALLOW", "check": "min_knee > 85", "tip": "Go a bit lower",
+                        "priority": 2, "fix": "Sit down until thighs are parallel."}]}
+    faults = FormAnalyzer(rules).check_rules("squat", summary(knee=(95, 175)))
+    assert faults[0].fix == "Sit down until thighs are parallel."
+
+
+def test_every_project_rule_explains_how_to_correct():
+    fa = FormAnalyzer(load_config("rules"))
+    missing = [r.code for rules in fa.rules.values() for r in rules if len(r.fix) < 40]
+    assert missing == []
+
+
+def test_verdict_good_or_bad():
+    from coach.reasoning.form_analyzer import Fault, verdict
+    assert verdict([], 100) == "good"
+    assert verdict([], None) == "good"
+    assert verdict([], 30) == "bad"  # aucune règle, mais score du modèle bas
+    assert verdict([Fault("SQUAT_SHALLOW", "Go a bit lower", 2)], 90) == "bad"
+
+
+def test_every_project_rule_has_a_short_spoken_cue():
+    fa = FormAnalyzer(load_config("rules"))
+    too_long = [(r.code, r.say) for rules in fa.rules.values() for r in rules
+                if not r.say or len(r.say.split()) > 3]
+    assert too_long == []
+
+
+def test_camera_view_from_shoulder_width():
+    from coach.reasoning.form_analyzer import rep_view
+    assert rep_view({"min_shoulder_width": 0.7, "max_shoulder_width": 0.9}) == "front"
+    assert rep_view({"min_shoulder_width": 0.05, "max_shoulder_width": 0.3}) == "side"
+    assert rep_view({}) == "side"  # inconnue : la vue conseillée
+
+
+def test_rules_only_apply_in_their_view():
+    rules = {"squat": [
+        {"code": "SQUAT_SHALLOW", "check": "min_knee > 85", "view": "side", "tip": "Go a bit lower", "priority": 2},
+        {"code": "SQUAT_KNEES_IN", "check": "min_knee_spread < 0.8", "view": "front", "tip": "Knees out",
+         "priority": 1}]}
+    fa = FormAnalyzer(rules)
+    side = {"exercise": "squat", "tempo_s": 2.0,
+            "features_min": {"knee": 95, "knee_spread": 0.6, "shoulder_width": 0.1},
+            "features_max": {"knee": 175, "knee_spread": 1.0, "shoulder_width": 0.2}}
+    front = {**side, "features_min": {**side["features_min"], "shoulder_width": 0.75},
+             "features_max": {**side["features_max"], "shoulder_width": 0.85}}
+    assert [f.code for f in fa.check_rules("squat", side)] == ["SQUAT_SHALLOW"]
+    assert [f.code for f in fa.check_rules("squat", front)] == ["SQUAT_KNEES_IN"]
+
+
+def test_invalid_view_raises():
+    with pytest.raises(ValueError):
+        Rule.parse({"code": "X", "check": "min_knee > 3", "view": "top", "tip": "", "priority": 1})
+
+
+def test_project_squat_rules_cover_back_knees_and_stance_from_the_front():
+    fa = FormAnalyzer(load_config("rules"))
+    front = {r.code for r in fa.rules["squat"] if r.view in ("front", "any")}
+    assert {"SQUAT_LEAN", "SQUAT_KNEES_IN", "SQUAT_NARROW", "SQUAT_SHALLOW"} <= front

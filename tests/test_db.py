@@ -20,4 +20,5 @@ def test_save_and_report_session():
     assert rep["avg_score"] == 80.0
     assert rep["sets"][0]["reps"] == 2 and rep["sets"][0]["partial"] == 1
     assert rep["sets"][0]["faults"] == {"SQUAT_SHALLOW": 1}
+    assert rep["sets"][0]["verdicts"] == ["good", "bad"]  # reps comptées seulement
     assert repo.list_sessions()[0]["reps"] == 2
