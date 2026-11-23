@@ -60,9 +60,9 @@ Landmarks are turned into **16 numbers per frame** (`coach/features/angles.py`).
 - **Sliding window:** keeps the last 30 frames (2 seconds, sampled at 15 frames per second) as a `(30, 16)` array for the classifier.
 
 ### Stage 4: Exercise classifier (LSTM) *(done)*
-**Result** (`training/train_classifier.py`, 3 minutes on the RTX 3050): tested on 5 subjects never seen in training, **96.7% of 2-second windows** are right (push-up 100%, curl 97%, squat 93%) and **98% of clips** by majority vote. The dataset has no idle footage, so its 4 other exercises (shoulder press, tricep, back row, abs) stand in for `idle`. Validation for early stopping uses 3 other subjects. Normalization is stored inside the model.
+**Result** (one fixed split, not a cross-validation; `training/train_classifier.py`, 3 minutes on the RTX 3050): tested on 5 subjects never seen in training, **96.7% of 2-second windows** are right (push-up 100%, curl 97%, squat 93%) and **98% of clips** by majority vote. The dataset has no idle footage, so its 4 other exercises (shoulder press, tricep, back row, abs) stand in for `idle`. Validation for early stopping uses 3 other subjects. Normalization is stored inside the model.
 A small PyTorch LSTM (2 layers × 64 units, dropout 0.3) reads the 30-frame window and outputs one of `squat | pushup | curl | idle`.
-- It runs every 10 frames, not every frame.
+- It runs every 5 frames, not every frame.
 - The label only changes after **5 consecutive votes above 70% confidence**, which stops it flickering between exercises.
 - Trained on the GPU; exported as TorchScript for the app.
 
@@ -81,7 +81,7 @@ Thresholds were set from the real angle curves (`configs/rules.yaml`):
 | Push-up | elbow | 150° | 100° | 72–79° |
 | Curl | elbow | 145° | 80° | 57–65° |
 
-**Evaluation** (`scripts/eval_rep_counter.py`, 296 clips, side and diagonal views), on the reps actually shown to the user. The reference is an offline peak count of each angle curve, not a hand count. **79% of clips exact, 92% within ±1 rep.** Side view: curl 100%, squat 96%, push-up 88%; diagonal: curl 100%, push-up 90%, squat 78%. *Correction:* the 88% previously reported here counted partial reps as reps; on counted reps alone the old counter was only 58% exact and 70% within ±1. A hand check of 8 disputed clips on contact sheets confirmed the fix on clear clips (e.g. 16 real push-ups: counter 16, reference 2) and showed the remaining errors: shallow bad-form reps and a detection glitch on a clip's very first frame. Squats where the knees barely bend (about 25° of movement) are still not counted.
+**Evaluation** (`scripts/eval_rep_counter.py`, 296 clips, side and diagonal views), on the reps actually shown to the user. The reference is an offline peak count of each angle curve, not a hand count. **79% of clips exact, 92% within ±1 rep**, on the same clips the thresholds were tuned on, so this is optimistic. Side view: curl 100%, squat 96%, push-up 88%; diagonal: curl 100%, push-up 90%, squat 78%. *Correction:* the 88% previously reported here counted partial reps as reps; on counted reps alone the old counter was only 58% exact and 70% within ±1. A rough check by eye on contact sheets (7 disputed clips opened, about 5 countable) went both ways: on one clip of about 16 push-ups the counter said 16 and the reference 2, but the counter still under-counted two others (about 8 real reps counted as 4, about 14 shallow reps counted as 10). This is not a hand-counted test set. Squats where the knees barely bend (about 25° of movement) are still not counted.
 
 **Live demo:** `python scripts/live_rep_counter.py --exercise squat` (or `pushup`, `curl`) opens the webcam and shows the skeleton, the count and the state. It runs at 32–41 FPS on the CPU.
 
@@ -116,7 +116,7 @@ Chooses **one tip at a time** so the user is not overwhelmed (`coach/feedback/en
 - Every tip shown is stored for the report.
 
 ### The pipeline *(done)*
-`coach/pipeline.py` runs all the stages on each frame at **25–32 FPS on a CPU**. In auto mode, the LSTM needs about 3 seconds to recognize the exercise; a rep counter runs in parallel for each exercise meanwhile, so those first reps are kept once the exercise is known. On the six demo clips it recognizes every exercise, counts every rep exactly, and scores good form 90–96 and bad form 2–5.
+`coach/pipeline.py` runs all the stages on each frame at **25–32 FPS on a CPU**. In auto mode, the LSTM needs about 3 seconds to recognize the exercise; a rep counter runs in parallel for each exercise meanwhile, so those first reps are kept once the exercise is known. On the six demo clips it recognizes every exercise and matches the automatic rep count, with scores of 90–96 for good form and 2–5 for bad form. Those clips were hand-picked for matching counts and clear contrast, and were used in training: they illustrate the app and do not measure it.
 
 ## 3. The interface (Streamlit) *(done)*
 Run with `python -m streamlit run app/streamlit_app.py`. Presentation guide: [DEMO.md](DEMO.md).

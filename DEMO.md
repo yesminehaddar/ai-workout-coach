@@ -50,18 +50,26 @@ How to present the AI Workout Coach in about 10 minutes, with or without the web
 Measured on people the models never saw during training:
 
 - **Exercise recognition:** 96.7% of 2-second windows, 98% of clips.
-- **Rep counter:** 79% of clips exact, 92% within ±1 rep (296 clips; side view: curl 100%, squat 96%, push-up 88%).
 - **Form score:** 74% of clips classified good/bad correctly (curl 82%, squat 71%, push-up 68%).
+
+Measured on the clips used for tuning, so optimistic:
+
+- **Rep counter:** 79% of clips exact, 92% within ±1 rep (296 clips; side view: curl 100%, squat 96%, push-up 88%), against an automatic count, not a hand count.
+- **Form rules:** 72% of clips.
+
+Other:
+
 - **Speed:** 25–32 frames per second on a laptop CPU, the whole pipeline.
 - **Data:** 1,041 videos of 26 people (Mendeley dataset), 445,000 frames processed.
 
 ## Honest limits (good to say before being asked)
 
-- **The demo clips come from the training dataset.** The scores above are the honest ones, measured on held-out people.
+- **The demo clips are hand-picked**: chosen because the rep count matched and the good/bad contrast was clear, and they were used in training. They show how the app works, not how accurate it is.
+- **The exercise recognition figure** comes from a single split with 5 test people.
 - **26 people only**, filmed in gyms. A home webcam is different; validating on our own clips is step 8.
 - **Front view:** push-ups and curls are not reliable from the front (the arms hide the body). The app asks for a side view.
 - **The dataset only says "good" or "bad"**, not which mistake. The specific tips come from rules tuned on the data.
-- **Next:** the QEVD dataset (Qualcomm, about 1,900 people at home) labels specific squat mistakes. On a first sample of 362 clips, our features already detect them well (AUC 0.75–0.95). The full download is in progress.
+- **Next:** the QEVD dataset (Qualcomm, about 1,900 people at home) labels specific squat mistakes. On a first sample of 362 clips (cross-validation AUC): narrow stance 0.95, back not straight 0.92, shallow 0.88, knees over toes 0.75. On the official test split, with only 13 to 31 positive clips per mistake: 0.96, 0.97, 0.88 and 0.68. QEVD has no person IDs, so the same person may be on both sides. The full download is in progress.
 
 ## Plan B
 

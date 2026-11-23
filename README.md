@@ -12,7 +12,7 @@ A personal trainer that runs on a laptop with a webcam. It recognizes the exerci
 2. Smoothed the landmarks with a One Euro filter and kept a 30-frame sliding window, ready for a sequence classifier.
 3. Extracted the features of the whole dataset into Parquet: 445,208 frames from 1,041 videos, pose detected in 99.9% of frames.
 4. Audited detection quality on every video with annotated clips and a quality report, and dropped the camera views that were unreliable.
-5. Built a rep counter (state machine, no ML) whose thresholds adapt to the user and camera view: 79% of 296 clips exact and 92% within ±1 rep of an independent count, 32 to 41 FPS live on a CPU.
+5. Built a rep counter (state machine, no ML) whose thresholds adapt to the user and camera view: 79% of 296 clips exact and 92% within ±1 rep of an automatic peak count (tuned on the same clips, so optimistic), 32 to 41 FPS live on a CPU.
 6. Built a rule-based form analyzer: 11 rules tuned on the good/bad labels, 72% of 244 clips classified correctly, with a tip and a score per rep in the live demo.
 7. Trained the LSTM exercise classifier: 96.7% of 2-second windows and 98% of clips right on 5 subjects never seen in training (3 min on the GPU), and the Random Forest form score: 74% of clips right on held-out subjects (curl 82%, squat 71%, push-up 68%).
 8. Built the application: a pipeline that runs every stage on each frame (25 to 32 FPS on a CPU), a feedback engine (one tip at a time, safety first, 3-second cooldown), a SQLite session history and a three-page Streamlit interface (live coach, session report, history).
@@ -24,17 +24,17 @@ A personal trainer that runs on a laptop with a webcam. It recognizes the exerci
 | Videos processed | 1,041 (one corrupt file excluded) |
 | Frames extracted | 445,208, pose detected in 99.9% |
 | Extraction time | 61 minutes on 6 CPU cores |
-| Rep counter, all clips (296, side and diagonal views) | 79% exact, 92% within ±1 rep |
+| Rep counter, all clips (296, side and diagonal views; tuned on these clips) | 79% exact, 92% within ±1 rep |
 | Rep counter, side view (within ±1) | curl 100%, squat 96%, push-up 88% |
 | Rep counter, diagonal view (within ±1) | curl 100%, push-up 90%, squat 78% |
-| Form rules, clips classified good/bad (244) | 72%: curl 76%, push-up 71%, squat 65% |
+| Form rules, clips classified good/bad (244; tuned on these clips) | 72%: curl 76%, push-up 71%, squat 65% |
 | Exercise classifier (LSTM), 5 unseen subjects | 96.7% of windows, 98% of clips |
 | Form score (Random Forest), held-out subjects | 74% of clips (curl 82%, squat 71%, push-up 68%) |
 | Live speed, rep counter alone | 32 to 41 FPS on the CPU |
 | Live speed, full pipeline (pose, LSTM, counter, form) | 25 to 32 FPS on the CPU |
 | Unit tests | 34 passing |
 
-The dataset has no hand-counted reps, so the counter is compared with an independent offline peak count of each angle curve.
+**How to read these.** Only the LSTM and Random Forest rows are measured on people the models never saw. The LSTM row is a single split with 5 test people, not a cross-validation. The rep counter and the form rules were tuned on the clips they are scored on, so they are optimistic. The dataset has no hand-counted reps: the counter is compared with an offline peak count of the same angle curve, which is itself sometimes wrong. The demo clips were hand-picked and are not evidence of typical accuracy.
 
 ## 3. Current State
 
@@ -126,7 +126,7 @@ Thresholds were set from the real angle curves and live in `configs/rules.yaml`.
 ### Phase E: Form analyzer (rules done)
 
 - Every clip is cut into reps (4,620 reps, `data/processed/reps.parquet`). Good and bad clips of the same person were compared to find what differs: push-up hips sag and hands too far forward, curl reps partial and rushed; squat faults vary by person.
-- 11 rules in `configs/rules.yaml` (`"<measure> <op> <value>"`), each firing on only 5-9% of good reps. A clip is judged bad when over 30% of its reps have a fault: 72% of 244 clips correct (curl 76%, push-up 70%, squat 63%).
+- 11 rules in `configs/rules.yaml` (`"<measure> <op> <value>"`), each firing on only 5-9% of good reps. A clip is judged bad when over 30% of its reps have a fault: 72% of 244 clips correct (curl 76%, push-up 71%, squat 65%), on the clips used to tune them.
 - A Random Forest (200 trees, one per exercise, `training/train_form_model.py`) scores each rep from 0 to 100. Cross-validated by subject: 74% of clips right. It replaces the temporary rule-based score. The rules say what to fix, the model says how good the rep was overall.
 
 ### Phase F: Exercise classifier, feedback and app (done)
@@ -181,7 +181,7 @@ make run              # = python -m streamlit run app/streamlit_app.py, then ope
 make demo-video       # backup video: demo/coach_demo.mp4
 ```
 
-The models are not in Git: `python training/train_classifier.py` and `python training/train_form_model.py` rebuild them (about 4 minutes). Stand side-on to the camera: detection is reliable from the side, not from the front.
+The trained models (`models/exercise_lstm.pt`, `models/form_model.joblib`) are stored with [Git LFS](https://git-lfs.com): run `git lfs install` before cloning, or `git lfs pull` after. Retraining takes about 4 minutes with `training/train_classifier.py` and `training/train_form_model.py`, but first needs the dataset and the extraction of step 4 (about an hour). The demo videos come from that dataset and are not in Git; without it, use an uploaded video or the webcam. Stand side-on to the camera: detection is reliable from the side, not from the front.
 
 **4. Rebuild the dataset results** (needs the videos in `data/raw/`, see below).
 
