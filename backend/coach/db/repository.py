@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
 
-from coach.db.models import ExerciseSet, FormEvent, Rep, Session, User
+from coach.db.models import ExerciseSet, FormEvent, Rep, Session, User, UserProfile
 from coach.reasoning.form_analyzer import verdict
 
 
@@ -104,3 +104,34 @@ class SessionRepository:
                      "avg_score": s.avg_score,
                      "reps": sum(st.rep_count for st in s.sets),
                      "exercises": ", ".join(st.exercise for st in s.sets)} for s in rows]
+
+
+PROFILE_FIELDS = ("age", "gender", "height_cm", "weight_kg", "target_weight_kg", "experience", "equipment")
+
+
+class ProfileRepository:
+    """Profil sportif d'un utilisateur. Les valeurs sont validées avant (coach.planner.AthleteProfile)."""
+
+    def __init__(self, factory: sessionmaker):
+        self.factory = factory
+
+    def get(self, user: str = "Demo") -> dict | None:
+        with self.factory() as db:
+            row = db.scalar(select(UserProfile).join(User).where(User.name == user))
+            return None if row is None else {f: getattr(row, f) for f in PROFILE_FIELDS}
+
+    def save(self, profile: dict, user: str = "Demo") -> None:
+        with self.factory() as db:
+            u = db.scalar(select(User).where(User.name == user))
+            if u is None:
+                u = User(name=user)
+                db.add(u)
+                db.flush()
+            row = db.scalar(select(UserProfile).where(UserProfile.user_id == u.id))
+            if row is None:
+                row = UserProfile(user_id=u.id)
+                db.add(row)
+            for f in PROFILE_FIELDS:
+                setattr(row, f, profile[f])
+            row.updated_at = datetime.now()
+            db.commit()

@@ -1,6 +1,6 @@
 # AI Workout Coach: Real-Time Exercise Coaching from a Webcam
 
-A personal trainer that runs on a laptop with a webcam. It recognizes the exercise (squat, push-up, bicep curl), counts the repetitions, judges the posture on each rep and gives one short tip at a time. Everything runs locally and in real time: no video leaves the computer.
+A personal trainer that runs on a laptop with a webcam. It recognizes the exercise (squat, push-up, bicep curl), counts the repetitions, judges the posture on each rep and gives one short tip at a time. Everything runs locally and in real time: no video leaves the computer. A "Gym Bro" chatbot also plans the session (4-5 exercises with sets, reps and rest) from the user's profile, through the Groq API: only the profile numbers and the chosen muscle group are sent.
 
 > **Status (17 November 2026):** steps 1 to 7 of 8 are done. The Streamlit app runs the full coach on a demo video, an uploaded video or the webcam: it recognizes the exercise, counts reps, gives one tip at a time with a form score, and saves every session. Validation on our own webcam clips (step 8) is next.
 >
@@ -32,7 +32,7 @@ A personal trainer that runs on a laptop with a webcam. It recognizes the exerci
 | Form score (Random Forest), held-out subjects | 74% of clips (curl 82%, squat 71%, push-up 68%) |
 | Live speed, rep counter alone | 32 to 41 FPS on the CPU |
 | Live speed, full pipeline (pose, LSTM, counter, form) | 25 to 32 FPS on the CPU |
-| Unit tests | 34 passing |
+| Unit tests | 92 passing (Groq is simulated; one live Groq test runs only with RUN_GROQ_LIVE=1) |
 
 **How to read these.** Only the LSTM and Random Forest rows are measured on people the models never saw. The LSTM row is a single split with 5 test people, not a cross-validation. The rep counter and the form rules were tuned on the clips they are scored on, so they are optimistic. The dataset has no hand-counted reps: the counter is compared with an offline peak count of the same angle curve, which is itself sometimes wrong. The demo clips were hand-picked and are not evidence of typical accuracy.
 
@@ -140,6 +140,19 @@ Thresholds were set from the real angle curves and live in `backend/coach/config
 - Streamlit interface (`frontend/`): live coach (demo video, uploaded video or webcam), session report and history. Sessions are saved in SQLite (users, sessions, sets, reps, form events) with SQLAlchemy.
 - `frontend/desktop/make_demo_video.py` renders a backup demo video (`data/demo/coach_demo.mp4`, 3 min): six clips, good and bad form for each exercise, with the full overlay.
 
+### Phase G: Session planner chatbot (done)
+
+The app opens on **Plan my session**. Gym Bro asks "what are we going to hit today?", the user picks chest, back, legs, shoulders, arms or other, and gets a 4-5 exercise plan (sets, reps, rest, one form tip each). Follow-up messages adjust the plan ("only dumbbells", "swap the bench press").
+
+- **Profile page**: age, gender, height, weight, target weight, experience, equipment. Validated (`coach/planner/profile.py`) and stored in a separate `profiles` table, so existing databases keep working.
+- **Prompt** (`coach/planner/prompt.py`): the programming rules (rep ranges by goal, beginner and age adjustments, equipment) and the JSON format. The goal (lose fat, build muscle, maintain) comes from the target weight. Profile fields are numbers or fixed choices; the only free text (the "other" focus and follow-ups) is cleaned, shortened and put between tags that the prompt treats as data.
+- **Groq call** (`coach/planner/groq_client.py`): plain HTTPS with `requests`, JSON mode, 30 s timeout, readable errors. The model is set in `app.yaml` (`planner.model`) or with `GROQ_MODEL`.
+- **Checked output** (`coach/planner/plan.py`): only the expected fields are kept, numbers are bounded and texts shortened. A malformed answer is asked again once. The plan is shown as plain text and a table, never as HTML.
+- **API key**: read from the `GROQ_API_KEY` environment variable or the `.env` file at the project root (ignored by git, see `.env.example`). It is never in the code, the logs or the error messages. A test fails if a Groq key (`gsk_...`) is ever committed.
+- **Isolation**: the planner imports neither the pose pipeline nor PyTorch or scikit-learn (checked by a test). The live coach, the models and their tests are unchanged.
+
+**Setup:** copy `.env.example` to `.env`, put your key from [console.groq.com/keys](https://console.groq.com/keys) after `GROQ_API_KEY=`, restart the app, then fill in the Profile page. For Docker, put the same line in `deploy/.env`.
+
 ## 6. Key Design Decisions
 
 - **Split by person, never by clip.** With only 26 subjects, the same person in training and test would inflate the results.
@@ -159,7 +172,7 @@ Thresholds were set from the real angle curves and live in `backend/coach/config
 | `ml/data/extract_rep_summaries.py` | Cut every clip into reps, one summary row per rep | Done |
 | `ml/evaluation/eval_form_rules.py` | Check the posture rules against the good/bad labels | Done |
 | `frontend/desktop/live_rep_counter.py` | Webcam demo: skeleton, count and state | Done |
-| `frontend/streamlit_app.py` | The application: live coach, session report, history | Done |
+| `frontend/streamlit_app.py` | The application: session planner chatbot, live coach, session report, history, profile | Done |
 | `frontend/desktop/make_demo_video.py` | Backup demo video with the full overlay | Done |
 | `ml/training/train_classifier.py`, `ml/training/train_form_model.py` | Train the LSTM and the Random Forest | Done |
 | `ml/data/qevd_split_zip.py`, `ml/data/extract_qevd.py`, `ml/evaluation/eval_qevd_squat.py` | Read, extract and test the QEVD dataset (front-view squats) | Done |
@@ -167,7 +180,7 @@ Thresholds were set from the real angle curves and live in `backend/coach/config
 
 ## 8. Reproducible Run Order
 
-On Windows without `make`, use `.	asks.ps1 <task>` (same tasks, plus `retrain`; `.	asks.ps1` lists them).
+On Windows without `make`, use `.\tasks.ps1 <task>`: the same tasks plus `env`, `test-groq`, `retrain`, `use-candidates` and the QEVD evaluations. `.\tasks.ps1` lists them all with a description. Examples: `.\tasks.ps1 run`, `.\tasks.ps1 live pushup`, `.\tasks.ps1 test-groq`.
 
 **1. Install and test.**
 
@@ -239,7 +252,7 @@ Mendeley dataset "fitness exercises, good and bad form" (CC BY 4.0): 1,042 video
 ai-workout-coach/
 ├── frontend/                 What the user sees
 │   ├── streamlit_app.py      web app entry point (navigation between the views)
-│   ├── views/                live coach, session report, history
+│   ├── views/                session planner chatbot, live coach, session report, history, profile
 │   ├── ui.py                 shared look: cards, report, best-practice texts
 │   └── desktop/              OpenCV window demo (live_rep_counter.py), backup demo video
 ├── backend/                  The coach engine (Python package `coach`, used by the frontend)
@@ -249,7 +262,8 @@ ai-workout-coach/
 │       ├── features/         joint angles, One Euro smoothing, 30-frame window
 │       ├── reasoning/        exercise classifier (LSTM), rep counter, form analyzer
 │       ├── feedback/         one tip at a time + how to correct it
-│       ├── db/               SQLite sessions, sets, reps, form events
+│       ├── planner/          Gym Bro chatbot: profile, prompt.py, Groq client, plan checks
+│       ├── db/               SQLite sessions, sets, reps, form events, profiles
 │       ├── configs/          app.yaml, rules.yaml (thresholds, tips, corrections), model.yaml
 │       ├── pipeline.py       runs every stage on each frame
 │       └── datasets.py       Mendeley + QEVD loading for training
@@ -286,6 +300,7 @@ ai-workout-coach/
 | Data | pandas, Parquet (pyarrow), NumPy |
 | Storage | SQLite via SQLAlchemy |
 | Interface | Streamlit (webcam through OpenCV) |
+| Session planner | Groq API (OpenAI-compatible chat completions) via requests |
 | Tooling | MLflow, Docker, docker-compose, Makefile, pytest |
 
 Full project description: [docs/PROJECT_DESCRIPTION.md](docs/PROJECT_DESCRIPTION.md).

@@ -8,3 +8,5 @@ data/mlruns
 data/keypoint_previews
 data/*.zip
 data/*.z0*
+.env
+**/.env

@@ -25,3 +25,9 @@ form_model:
 feedback:
   cooldown_s: 3
   encourage_after_clean_reps: 2   # « Great, keep going » après 2 reps propres
+
+planner:                     # chatbot « Gym Bro » (page Plan my session), via l'API Groq
+  model: openai/gpt-oss-120b   # remplaçable par la variable d'environnement GROQ_MODEL
+  temperature: 0.4
+  max_tokens: 2048             # modèle à raisonnement : les tokens de réflexion comptent dans la limite
+  timeout_s: 30

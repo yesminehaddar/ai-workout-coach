@@ -1,6 +1,7 @@
 """Schéma de la base SQLite (SQLAlchemy). Chaque flèche est un un-à-plusieurs :
 
 users -> sessions -> sets -> reps -> form_events
+users -> profiles (un profil sportif par utilisateur, pour le planificateur de séance)
 """
 from datetime import datetime
 
@@ -64,3 +65,19 @@ class FormEvent(Base):
     tip_text: Mapped[str] = mapped_column(String(200))
     shown_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     rep: Mapped[Rep] = relationship(back_populates="events")
+
+
+class UserProfile(Base):
+    """Profil sportif (page Profile). Table à part : create_all l'ajoute aux bases existantes
+    sans toucher aux tables des séances."""
+    __tablename__ = "profiles"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True)
+    age: Mapped[int] = mapped_column(Integer)
+    gender: Mapped[str] = mapped_column(String(20))
+    height_cm: Mapped[float] = mapped_column(Float)
+    weight_kg: Mapped[float] = mapped_column(Float)
+    target_weight_kg: Mapped[float] = mapped_column(Float)
+    experience: Mapped[str] = mapped_column(String(20))
+    equipment: Mapped[str] = mapped_column(String(30))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

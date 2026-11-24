@@ -6,7 +6,7 @@ import streamlit as st
 
 from coach.config import load_config
 from coach.db.database import init_db
-from coach.db.repository import SessionRepository
+from coach.db.repository import ProfileRepository, SessionRepository
 from coach.feedback.voice import Voice
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -132,6 +132,11 @@ def classifier_available() -> bool:
 @st.cache_resource
 def repository() -> SessionRepository:
     return SessionRepository(init_db())
+
+
+@st.cache_resource
+def profile_repository() -> ProfileRepository:
+    return ProfileRepository(repository().factory)
 
 
 @st.cache_resource
